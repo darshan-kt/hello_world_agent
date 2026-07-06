@@ -51,16 +51,16 @@ Here is a visual representation of how the `hello_agent` thinks:
 
 ```mermaid
 graph TD
-    User([User asks: "Who is the Prime Minister of India?"]) --> T1
+    User(["User asks: Who is the Prime Minister of India?"]) --> T1
     
     subgraph The ReAct Loop
-    T1[🧠 THOUGHT: I don't know this off the top of my head. I need to search the web.] --> A1
-    A1[⚡ ACTION: Call 'web_search' Tool] --> O1
-    O1[👁️ OBSERVATION: Search results return 'Narendra Modi'] --> T2
-    T2[🧠 THOUGHT: I have the answer now.] --> F1
+    T1["🧠 THOUGHT: I don't know this off the top of my head. I need to search the web."] --> A1
+    A1["⚡ ACTION: Call 'web_search' Tool"] --> O1
+    O1["👁️ OBSERVATION: Search results return 'Narendra Modi'"] --> T2
+    T2["🧠 THOUGHT: I have the answer now."] --> F1
     end
     
-    F1([Final Answer: 'The Prime Minister of India is Narendra Modi.'])
+    F1(["Final Answer: The Prime Minister of India is Narendra Modi."])
     
     classDef loop fill:#1f2937,stroke:#3b82f6,stroke-width:2px,color:#fff;
     class T1,A1,O1,T2 loop;
