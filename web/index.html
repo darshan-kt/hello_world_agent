@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hello Agent — AI Agent Reference Project</title>
+  <meta name="description" content="A reference AI agent built with the ReAct pattern. Includes tools, memory, and a beautiful chat interface." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+<!-- ── Sidebar ──────────────────────────────────────── -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="agent-avatar" id="agent-avatar">
+      <div class="avatar-pulse"></div>
+      <span class="avatar-icon">🤖</span>
+    </div>
+    <div class="agent-info">
+      <h2 class="agent-name" id="agent-name">Aria</h2>
+      <span class="agent-status" id="agent-status">
+        <span class="status-dot online"></span>
+        Online
+      </span>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <button class="nav-btn active" id="btn-chat" onclick="showPanel('chat')">
+      <span class="nav-icon">💬</span> Chat
+    </button>
+    <button class="nav-btn" id="btn-tools" onclick="showPanel('tools')">
+      <span class="nav-icon">🔧</span> Tools
+    </button>
+    <button class="nav-btn" id="btn-arch" onclick="showPanel('arch')">
+      <span class="nav-icon">🧠</span> Architecture
+    </button>
+  </nav>
+
+  <div class="sidebar-footer">
+    <button class="reset-btn" id="btn-reset" onclick="resetConversation()">
+      🗑️ Clear Chat
+    </button>
+    <div class="model-badge" id="model-badge">
+      <span class="model-dot"></span>
+      <span id="model-name">gemini-2.0-flash</span>
+    </div>
+  </div>
+</aside>
+
+<!-- ── Main Content ─────────────────────────────────── -->
+<main class="main">
+
+  <!-- Chat Panel -->
+  <section class="panel active" id="panel-chat">
+    <div class="panel-header">
+      <h1 class="panel-title">Hello Agent <span class="version-badge">v1.0</span></h1>
+      <p class="panel-subtitle">ReAct-powered AI Agent · Tools · Memory · Hello World Reference</p>
+    </div>
+
+    <div class="chat-container" id="chat-container">
+      <!-- Welcome message -->
+      <div class="message-group agent-group" id="welcome-msg">
+        <div class="message-bubble agent-bubble">
+          <div class="bubble-header">
+            <span class="bubble-role">Aria</span>
+            <span class="bubble-time" id="welcome-time"></span>
+          </div>
+          <div class="bubble-content">
+            <p>👋 Hello! I'm <strong>Aria</strong>, a reference AI agent built with the <strong>ReAct pattern</strong>.</p>
+            <p>I can use tools to help you. Try asking me:</p>
+            <ul class="suggestions">
+              <li onclick="sendSuggestion(this)">🔢 What is 256 × 17 + 99?</li>
+              <li onclick="sendSuggestion(this)">🌤️ What's the weather in Tokyo?</li>
+              <li onclick="sendSuggestion(this)">🔍 Search: What is an AI agent?</li>
+              <li onclick="sendSuggestion(this)">🧠 Remember that my name is Darshan</li>
+              <li onclick="sendSuggestion(this)">💡 What tools do you have?</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <div class="input-wrapper">
+        <textarea
+          id="user-input"
+          class="user-input"
+          placeholder="Ask me anything… I'll think, use tools, and answer."
+          rows="1"
+          onkeydown="handleKeydown(event)"
+          oninput="autoResize(this)"
+        ></textarea>
+        <button class="send-btn" id="send-btn" onclick="sendMessage()">
+          <span class="send-icon">➤</span>
+        </button>
+      </div>
+      <div class="input-hint">Press <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for new line</div>
+    </div>
+  </section>
+
+  <!-- Tools Panel -->
+  <section class="panel" id="panel-tools">
+    <div class="panel-header">
+      <h1 class="panel-title">Available Tools</h1>
+      <p class="panel-subtitle">Functions the agent can call to get accurate information</p>
+    </div>
+    <div class="tools-grid" id="tools-grid">
+      <div class="loading-tools">Loading tools…</div>
+    </div>
+  </section>
+
+  <!-- Architecture Panel -->
+  <section class="panel" id="panel-arch">
+    <div class="panel-header">
+      <h1 class="panel-title">How It Works</h1>
+      <p class="panel-subtitle">The ReAct pattern — foundation of every production AI agent</p>
+    </div>
+
+    <div class="arch-content">
+      <div class="react-diagram">
+        <div class="react-step" id="step-think">
+          <div class="step-icon">💭</div>
+          <div class="step-label">THINK</div>
+          <div class="step-desc">LLM reasons about what the user needs and which tool (if any) to use</div>
+        </div>
+        <div class="react-arrow">→</div>
+        <div class="react-step" id="step-act">
+          <div class="step-icon">⚡</div>
+          <div class="step-label">ACT</div>
+          <div class="step-desc">Agent calls a tool with parameters, or produces a final answer</div>
+        </div>
+        <div class="react-arrow">→</div>
+        <div class="react-step" id="step-observe">
+          <div class="step-icon">👁️</div>
+          <div class="step-label">OBSERVE</div>
+          <div class="step-desc">Tool result is fed back to the LLM as new context</div>
+        </div>
+        <div class="react-arrow loop-arrow">↩ loop</div>
+      </div>
+
+      <div class="arch-cards">
+        <div class="arch-card">
+          <div class="arch-card-icon">🧠</div>
+          <h3>LLM Core</h3>
+          <p>Google Gemini 2.0 Flash — fast, capable, free tier. The "brain" that reasons and plans.</p>
+          <code>agent/core.py</code>
+        </div>
+        <div class="arch-card">
+          <div class="arch-card-icon">🔧</div>
+          <h3>Tool Registry</h3>
+          <p>Add any Python function as a tool with a single <code>@tool()</code> decorator.</p>
+          <code>agent/tools/registry.py</code>
+        </div>
+        <div class="arch-card">
+          <div class="arch-card-icon">💾</div>
+          <h3>Memory</h3>
+          <p>Short-term (sliding window) + long-term (JSON on disk) memory systems.</p>
+          <code>agent/memory.py</code>
+        </div>
+        <div class="arch-card">
+          <div class="arch-card-icon">⚡</div>
+          <h3>FastAPI Server</h3>
+          <p>REST + WebSocket API with real-time step streaming to the UI.</p>
+          <code>api/server.py</code>
+        </div>
+      </div>
+
+      <div class="code-flow">
+        <h3 class="code-flow-title">The ReAct Loop in Code</h3>
+        <pre class="code-block"><span class="kw">for</span> iteration <span class="kw">in</span> range(MAX_ITERATIONS):
+    <span class="cm"># 1. THINK — ask the LLM</span>
+    response = llm.generate(prompt + memory + tools)
+    parsed   = parse(response)  <span class="cm"># extract thought/action/answer</span>
+
+    <span class="cm"># 2. ANSWER — if LLM has what it needs</span>
+    <span class="kw">if</span> parsed.final_answer:
+        <span class="kw">yield</span> AgentStep(<span class="str">"answer"</span>, parsed.final_answer)
+        <span class="kw">return</span>
+
+    <span class="cm"># 3. ACT — call the tool</span>
+    observation = run_tool(parsed.action, parsed.action_input)
+
+    <span class="cm"># 4. OBSERVE — add result to memory and loop again</span>
+    memory.add(<span class="str">"tool"</span>, observation)
+    <span class="kw">continue</span>  <span class="cm"># ← back to top, now LLM has more context</span></pre>
+      </div>
+
+      <div class="file-tree">
+        <h3>Project Structure</h3>
+        <pre class="tree-block">hello_agent/
+├── <span class="f-dir">agent/</span>
+│   ├── <span class="f-key">core.py</span>          <span class="f-cm">← ReAct loop (START HERE)</span>
+│   ├── <span class="f-key">memory.py</span>        <span class="f-cm">← Conversation history</span>
+│   └── <span class="f-dir">tools/</span>
+│       ├── <span class="f-key">registry.py</span>  <span class="f-cm">← @tool() decorator</span>
+│       ├── calculator.py    <span class="f-cm">← Math tool</span>
+│       ├── weather.py       <span class="f-cm">← Weather tool</span>
+│       ├── web_search.py    <span class="f-cm">← Search tool</span>
+│       └── memory_tool.py   <span class="f-cm">← Remember/recall</span>
+├── <span class="f-dir">api/</span>
+│   └── <span class="f-key">server.py</span>        <span class="f-cm">← FastAPI backend</span>
+├── <span class="f-dir">web/</span>             <span class="f-cm">← This UI</span>
+├── <span class="f-key">config.py</span>            <span class="f-cm">← All settings</span>
+├── <span class="f-key">main.py</span>              <span class="f-cm">← CLI interface</span>
+└── README.md</pre>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
