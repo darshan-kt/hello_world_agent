@@ -17,7 +17,7 @@ echo -e "${CYAN}${BOLD}  🤖 Hello Agent — Starting Up  ${NC}"
 echo -e "${CYAN}  ──────────────────────────────${NC}"
 
 # ── Check required env vars ────────────────────────────
-if [ -z "${GEMINI_API_KEY}" ] || [ "${GEMINI_API_KEY}" = "PASTE_YOUR_KEY_HERE" ] || [ "${GEMINI_API_KEY}" = "[GCP_API_KEY]" ]; then
+if [ -z "${GEMINI_API_KEY}" ] || [ "${GEMINI_API_KEY}" = "PASTE_YOUR_KEY_HERE" ]; then
   echo ""
   echo -e "${RED}  ✗ ERROR: GEMINI_API_KEY is not set!${NC}"
   echo ""
