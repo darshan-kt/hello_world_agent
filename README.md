@@ -4,6 +4,7 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green.svg)](https://fastapi.tiangolo.com)
 [![Gemini](https://img.shields.io/badge/LLM-Gemini%202.0%20Flash-purple.svg)](https://aistudio.google.com)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED.svg)](https://docker.com)
 
 > Built the same way AI agents are built at **Google**, **Amazon**, and **OpenAI**.
 > Use this as a reference or starting point for any agent project.
@@ -38,41 +39,59 @@ This project implements the **ReAct pattern** (Reasoning + Acting), which is the
 | 🖥️ **CLI** | Rich terminal interface for testing |
 | ⚡ **WebSocket** | Real-time step-by-step visualization |
 | 🔌 **FastAPI** | REST + WebSocket backend |
+| 🐳 **Docker** | One-command build & run via `make` |
 | 📦 **Zero Lock-in** | Pure Python, no LangChain/AutoGen required |
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Clone and set up
+### Option A — Docker (Recommended)
+
 ```bash
 git clone <your-repo-url>
 cd hello_agent
 
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate   # Linux/Mac
-# .venv\Scripts\activate    # Windows
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### 2. Get your FREE API key
-```
-https://aistudio.google.com/apikey
-```
-It's free. Takes 30 seconds.
-
-### 3. Configure
-```bash
+# 1. Configure (add your API key)
 cp .env.example .env
-# Edit .env and paste your GEMINI_API_KEY
+# Edit .env → set GEMINI_API_KEY=AIzaSy...
+# Get a free key: https://aistudio.google.com/apikey
+
+# 2. Build the image
+make build
+
+# 3. Run the web UI
+make run
+# → Open http://localhost:8000
 ```
 
-### 4. Run
+That's it — no Python setup needed on your machine.
 
-**CLI mode (great for testing):**
+---
+
+### Option B — Local Python (no Docker)
+
+```bash
+git clone <your-repo-url>
+cd hello_agent
+
+# Setup
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# Configure
+cp .env.example .env
+# Edit .env → set GEMINI_API_KEY
+
+# Run
+make dev           # CLI chat
+make dev-server    # Web UI at http://localhost:8000
+```
+
+### Run directly (bypassing make)
+
+**CLI mode:**
 ```bash
 python main.py
 ```
@@ -87,6 +106,42 @@ python main.py --server
 ```bash
 python main.py --message "What is sqrt(256) * 3?"
 ```
+
+---
+
+## 🐳 Docker & Makefile Reference
+
+### All `make` commands
+
+| Command | What it does |
+|---|---|
+| `make build` | Build the Docker image |
+| `make run` | **Start web UI** → `http://localhost:8000` |
+| `make run-cli` | Start interactive CLI chat inside Docker |
+| `make run-msg MSG="..."` | Send one question, print answer, exit |
+| `make stop` | Stop the running container |
+| `make logs` | Follow container logs live |
+| `make shell` | Open a bash shell inside the container |
+| `make rebuild` | Stop → rebuild image → run |
+| `make clean` | Remove container and image |
+| `make dev` | Run CLI locally (no Docker, uses venv) |
+| `make dev-server` | Run web server locally (no Docker) |
+
+### Docker folder structure
+
+```
+docker/
+├── Dockerfile       ← Multi-stage build (builder + slim runtime)
+└── entrypoint.sh    ← Startup script: validates env, picks run mode
+```
+
+### Run modes (set via `RUN_MODE` env var)
+
+| Mode | How to use |
+|---|---|
+| `server` | `make run` — default, starts web UI |
+| `cli` | `make run-cli` — interactive terminal chat |
+| `message` | `make run-msg MSG="What is 2+2?"` — single question |
 
 ---
 
@@ -113,9 +168,14 @@ hello_agent/
 │   ├── style.css             ← Dark glassmorphism design
 │   └── app.js                ← WebSocket + real-time rendering
 │
+├── docker/
+│   ├── Dockerfile            ← Multi-stage image build
+│   └── entrypoint.sh         ← Container startup & validation
+│
 ├── data/                     ← Auto-created, stores long-term memory
 │   └── memory.json
 │
+├── Makefile                  ← make build / run / run-cli / clean ...
 ├── config.py                 ← All settings (reads from .env)
 ├── main.py                   ← CLI entry point
 ├── requirements.txt
