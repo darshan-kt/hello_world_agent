@@ -12,13 +12,13 @@ Endpoints:
   GET  /health        → Health check
 """
 
+import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import AsyncGenerator
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -92,12 +92,17 @@ async def chat(request: ChatRequest):
     Send a message and get the full response with all intermediate steps.
     Use /ws for real-time streaming.
     """
-    steps = []
-    answer = ""
-    for step in _agent.run(request.message):
-        steps.append(step.to_dict())
-        if step.type == "answer":
-            answer = step.content
+    def run_agent() -> tuple:
+        steps = []
+        answer = ""
+        for step in _agent.run(request.message):
+            steps.append(step.to_dict())
+            if step.type == "answer":
+                answer = step.content
+        return answer, steps
+
+    # The agent makes blocking LLM calls — run it off the event loop
+    answer, steps = await asyncio.to_thread(run_agent)
     return ChatResponse(answer=answer, steps=steps)
 
 
@@ -136,8 +141,15 @@ async def websocket_endpoint(websocket: WebSocket):
             if not user_message:
                 continue
 
-            # Stream each ReAct step to the client
-            for step in _agent.run(user_message):
+            # Stream each ReAct step to the client.
+            # The agent generator makes blocking LLM calls, so pull each
+            # step in a worker thread to keep the event loop responsive.
+            step_gen = _agent.run(user_message)
+            done = object()
+            while True:
+                step = await asyncio.to_thread(next, step_gen, done)
+                if step is done:
+                    break
                 await websocket.send_text(json.dumps(step.to_dict()))
 
             # Signal completion
@@ -147,4 +159,7 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info("WebSocket client disconnected")
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
-        await websocket.send_text(json.dumps({"type": "error", "content": str(e)}))
+        try:
+            await websocket.send_text(json.dumps({"type": "error", "content": str(e)}))
+        except Exception:
+            pass  # socket already closed

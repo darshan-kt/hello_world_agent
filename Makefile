@@ -15,13 +15,15 @@ CYAN   := \033[0;36m
 YELLOW := \033[1;33m
 RESET  := \033[0m
 
-.PHONY: help build run run-cli run-msg stop logs shell clean rebuild dev
+.PHONY: help up down build run run-cli run-msg stop logs shell clean rebuild dev dev-server _env_check
 
 # ── Default target: show help ───────────────────────────
 help:
 	@echo ""
 	@echo "  $(CYAN)🤖 Hello Agent — Make Commands$(RESET)"
 	@echo "  ────────────────────────────────────────"
+	@echo "  $(GREEN)make up$(RESET)             Start everything with Docker Compose (recommended)"
+	@echo "  $(GREEN)make down$(RESET)           Stop the Compose stack"
 	@echo "  $(GREEN)make build$(RESET)          Build the Docker image"
 	@echo "  $(GREEN)make run$(RESET)            Start the web UI  →  http://localhost:$(PORT)"
 	@echo "  $(GREEN)make run-cli$(RESET)        Start interactive CLI chat inside Docker"
@@ -34,6 +36,15 @@ help:
 	@echo "  $(GREEN)make dev$(RESET)            Run locally without Docker (venv)"
 	@echo "  $(GREEN)make dev-server$(RESET)     Run web server locally without Docker"
 	@echo ""
+
+# ── Docker Compose (recommended) ────────────────────────
+up: _env_check
+	@echo "$(CYAN)▶ Starting Hello Agent (Docker Compose)...$(RESET)"
+	docker compose up -d --build
+	@echo "$(GREEN)✓ Running → http://localhost:$(PORT)$(RESET)"
+
+down:
+	docker compose down
 
 # ── Build ───────────────────────────────────────────────
 build:
@@ -86,10 +97,10 @@ logs:
 shell:
 	@echo "$(CYAN)▶ Opening shell in '$(IMAGE_NAME)'...$(RESET)"
 	docker run -it --rm \
+		--entrypoint /bin/bash \
 		--env-file $(ENV_FILE) \
 		-v $$(pwd)/data:/app/data \
-		$(IMAGE_NAME) \
-		--entrypoint /bin/bash
+		$(IMAGE_NAME)
 
 # ── Rebuild ─────────────────────────────────────────────
 rebuild: stop build run

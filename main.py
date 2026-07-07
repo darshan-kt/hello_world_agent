@@ -16,8 +16,6 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 from rich.prompt import Prompt
-from rich.style import Style
-from rich import print as rprint
 
 # Import agent (tool registration happens via agent/__init__.py)
 from agent import Agent

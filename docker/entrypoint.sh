@@ -32,8 +32,8 @@ fi
 
 # ── Print config summary ───────────────────────────────
 echo -e "${GREEN}  ✓ API Key      : ${NC}${GEMINI_API_KEY:0:12}... (set)"
-echo -e "${GREEN}  ✓ Model        : ${NC}${LLM_MODEL:-gemini-2.0-flash}"
-echo -e "${GREEN}  ✓ Agent Name   : ${NC}${AGENT_NAME:-Aria}"
+echo -e "${GREEN}  ✓ Model        : ${NC}${LLM_MODEL:-gemini-2.5-flash}"
+echo -e "${GREEN}  ✓ Agent Name   : ${NC}${AGENT_NAME:-Darshan-AI}"
 echo -e "${GREEN}  ✓ Port         : ${NC}${API_PORT:-8000}"
 echo ""
 

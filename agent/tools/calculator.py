@@ -6,8 +6,13 @@ Gives the agent ability to do accurate math.
 """
 
 import math
-import operator
+import re
 from agent.tools.registry import tool
+
+# Only allow characters that appear in plain math expressions.
+# Blocks quotes, brackets, and dunders — closes off eval() escape routes
+# like "".__class__.__mro__ while still allowing math.sqrt(144), 2 ** 10, etc.
+_ALLOWED_CHARS = re.compile(r"^[\d\s+\-*/%().,a-zA-Z_]+$")
 
 
 @tool(
@@ -30,6 +35,9 @@ from agent.tools.registry import tool
 )
 def calculator(expression: str) -> str:
     """Safely evaluate a math expression."""
+    if "__" in expression or not _ALLOWED_CHARS.match(expression):
+        return f"Error: expression contains disallowed characters: '{expression}'"
+
     # Safe eval: only allow math operations and math module
     allowed_globals = {
         "__builtins__": {},

@@ -10,7 +10,7 @@ Two types:
 This file handles short-term memory (the conversation thread).
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Literal
 import config
 
@@ -38,7 +38,7 @@ class ConversationMemory:
     def add(self, role: str, content: str, tool_name: str | None = None) -> None:
         """Append a new message."""
         self._messages.append(Message(role=role, content=content, tool_name=tool_name))
-        # Trim to window, but always keep the system message (index 0) if present
+        # Trim to the sliding window (system prompt is passed separately, not stored here)
         if len(self._messages) > self.window:
             self._messages = self._messages[-self.window:]
 

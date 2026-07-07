@@ -16,14 +16,14 @@ load_dotenv(Path(__file__).parent / ".env")
 # LLM Settings
 # ──────────────────────────────────────────────
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-LLM_MODEL      = os.getenv("LLM_MODEL", "gemini-2.0-flash")   # fast & free
+LLM_MODEL      = os.getenv("LLM_MODEL", "gemini-2.5-flash")   # fast & free
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.2"))  # lower = more deterministic
 MAX_TOKENS      = int(os.getenv("MAX_TOKENS", "2048"))
 
 # ──────────────────────────────────────────────
 # Agent Settings
 # ──────────────────────────────────────────────
-AGENT_NAME      = os.getenv("AGENT_NAME", "Aria")
+AGENT_NAME      = os.getenv("AGENT_NAME", "Darshan-AI")
 MAX_ITERATIONS  = int(os.getenv("MAX_ITERATIONS", "10"))  # ReAct loop guard
 
 # ──────────────────────────────────────────────

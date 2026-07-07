@@ -77,38 +77,38 @@ function updateStatus(online) {
 // Agent Step Rendering
 // ──────────────────────────────────────────────
 function handleAgentStep(step) {
-  removeTypingIndicator();
-
   switch (step.type) {
+    // Intermediate steps stay hidden — just update the spinner label
     case 'thought':
-      ensureAgentBubble();
-      appendStep('thought', '💭 Thought', step.content);
+      updateTypingLabel('Thinking…');
       break;
 
-    case 'action':
-      ensureAgentBubble();
-      const toolDisplay = `${step.tool_name}(${step.content})`;
-      appendStep('action', `⚡ Calling: ${step.tool_name}`, toolDisplay);
+    case 'action': {
+      const meta = TOOL_ICONS[step.tool_name];
+      updateTypingLabel(`${meta ? meta.icon + ' ' : ''}Using ${step.tool_name}…`);
       break;
+    }
 
     case 'observation':
-      ensureAgentBubble();
-      appendStep('observation', `👁️ Result from ${step.tool_name}`, step.content);
+      updateTypingLabel('Processing results…');
       break;
 
     case 'answer':
+      removeTypingIndicator();
       ensureAgentBubble();
       appendFinalAnswer(step.content);
       finishThinking();
       break;
 
     case 'error':
+      removeTypingIndicator();
       ensureAgentBubble();
       appendStep('error', '❌ Error', step.content);
       finishThinking();
       break;
 
     case 'done':
+      removeTypingIndicator();
       finishThinking();
       break;
 
@@ -174,19 +174,21 @@ function showTypingIndicator() {
   if (typingIndicator) return;
   const group = createElement('div', 'message-group agent-group');
   const indicator = createElement('div', 'typing-indicator');
-  const dotsDiv = createElement('div', 'typing-dots');
-  for (let i = 0; i < 3; i++) {
-    const dot = createElement('div', 'typing-dot');
-    dotsDiv.append(dot);
-  }
+  const spinner = createElement('div', 'spinner');
   const label = createElement('span', 'typing-label');
   label.textContent = 'Thinking…';
-  indicator.append(dotsDiv, label);
+  indicator.append(spinner, label);
   group.append(indicator);
   group.id = 'typing-group';
   document.getElementById('chat-container').append(group);
   typingIndicator = group;
   scrollToBottom();
+}
+
+function updateTypingLabel(text) {
+  if (!typingIndicator) showTypingIndicator();
+  const label = typingIndicator.querySelector('.typing-label');
+  if (label) label.textContent = text;
 }
 
 function removeTypingIndicator() {
@@ -273,7 +275,7 @@ function addUserBubble(text) {
 
 function sendSuggestion(el) {
   const text = el.textContent.replace(/^[^\s]+\s/, '').trim(); // remove emoji
-  document.getElementById('user-input').value = el.textContent;
+  document.getElementById('user-input').value = text;
   sendMessage();
 }
 

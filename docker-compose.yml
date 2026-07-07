@@ -1,0 +1,51 @@
+# ──────────────────────────────────────────────────────────
+# Hello Agent — Docker Compose
+#
+#   docker compose up -d          → build (if needed) + start web UI & API
+#   docker compose up -d --build  → force rebuild + start
+#   docker compose logs -f        → follow logs
+#   docker compose down           → stop everything
+#   docker compose run --rm cli   → interactive terminal chat
+#
+# Requires a .env file with a valid GEMINI_API_KEY
+# (copy .env.example to .env and fill in your key).
+# ──────────────────────────────────────────────────────────
+
+services:
+  # Web UI + REST/WebSocket API (one FastAPI server does both)
+  hello-agent:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: hello-agent
+    container_name: hello-agent-app
+    env_file: .env
+    environment:
+      RUN_MODE: server
+    ports:
+      - "${API_PORT:-8000}:${API_PORT:-8000}"
+    volumes:
+      # Persist long-term memory (remember/recall tool) across restarts
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('API_PORT','8000')+'/health', timeout=3)\""]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  # Interactive CLI chat (optional): docker compose run --rm cli
+  cli:
+    profiles: ["cli"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: hello-agent
+    env_file: .env
+    environment:
+      RUN_MODE: cli
+    volumes:
+      - ./data:/app/data
+    stdin_open: true
+    tty: true

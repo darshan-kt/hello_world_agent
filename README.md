@@ -1,13 +1,16 @@
-# Hello Agent 🤖
+# Hello Agent 🤖 (Darshan-AI)
 ### The "Hello World" of AI Agents — Production-Quality Reference Project
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green.svg)](https://fastapi.tiangolo.com)
-[![Gemini](https://img.shields.io/badge/LLM-Gemini%202.0%20Flash-purple.svg)](https://aistudio.google.com)
-[![Docker](https://img.shields.io/badge/Docker-ready-2496ED.svg)](https://docker.com)
+[![Gemini](https://img.shields.io/badge/LLM-Gemini%202.5%20Flash-purple.svg)](https://aistudio.google.com)
+[![Docker](https://img.shields.io/badge/Docker-Compose%20ready-2496ED.svg)](https://docker.com)
 
-> Built the same way AI agents are built at **Google**, **Amazon**, and **OpenAI**.
+> A real, working AI agent — live web search, live weather, persistent memory —
+> built the same way agents are built at **Google**, **Amazon**, and **OpenAI**.
 > Use this as a reference or starting point for any agent project.
+
+New to AI agents? Read **[AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)** first — a plain-language walkthrough of the concepts.
 
 ---
 
@@ -32,21 +35,23 @@ This project implements the **ReAct pattern** (Reasoning + Acting), which is the
 
 | Feature | Details |
 |---|---|
-| 🔄 **ReAct Loop** | Full think → act → observe → repeat cycle |
-| 🔧 **Tool System** | Add any function as a tool with `@tool()` decorator |
-| 💾 **Memory** | Short-term (conversation) + long-term (JSON persistence) |
-| 🌐 **Web UI** | Beautiful dark chat interface with real-time streaming |
+| 🔄 **ReAct Loop** | Full think → act → observe → repeat cycle, with multi-tool chaining |
+| 🧠 **Real LLM** | Google Gemini 2.5 Flash (free tier) |
+| 🔍 **Live Web Search** | Real DuckDuckGo search — no API key needed |
+| 🌤️ **Live Weather** | Real Open-Meteo data for any city — no API key needed |
+| 🔧 **Tool System** | Add any function as a tool with the `@tool()` decorator |
+| 💾 **Memory** | Short-term (conversation) + long-term (JSON, survives restarts) |
+| 🌐 **Web UI** | Dark chat interface — spinner while thinking, clean final answers |
 | 🖥️ **CLI** | Rich terminal interface for testing |
-| ⚡ **WebSocket** | Real-time step-by-step visualization |
-| 🔌 **FastAPI** | REST + WebSocket backend |
-| 🐳 **Docker** | One-command build & run via `make` |
+| ⚡ **WebSocket** | Real-time streaming from agent to browser |
+| 🐳 **Docker Compose** | Entire stack with one command: `docker compose up -d` |
 | 📦 **Zero Lock-in** | Pure Python, no LangChain/AutoGen required |
 
 ---
 
 ## 🚀 Quick Start
 
-### Option A — Docker (Recommended)
+### Option A — Docker Compose (Recommended)
 
 ```bash
 git clone <your-repo-url>
@@ -57,15 +62,23 @@ cp .env.example .env
 # Edit .env → set GEMINI_API_KEY=AIzaSy...
 # Get a free key: https://aistudio.google.com/apikey
 
-# 2. Build the image
-make build
-
-# 3. Run the web UI
-make run
+# 2. Start everything (builds automatically on first run)
+docker compose up -d
 # → Open http://localhost:8000
 ```
 
-That's it — no Python setup needed on your machine.
+That's it — no Python setup needed on your machine. Or use the shortcut: `make up`.
+
+| Command | What it does |
+|---|---|
+| `docker compose up -d` | Start the full stack (UI + API) |
+| `docker compose up -d --build` | Rebuild after code changes, then start |
+| `docker compose logs -f` | Follow the agent's logs live |
+| `docker compose ps` | Status (includes healthcheck: `healthy`) |
+| `docker compose down` | Stop everything |
+| `docker compose run --rm cli` | Interactive chat in the terminal instead |
+
+Long-term memory is persisted in `./data`, so the agent still remembers you after `docker compose down && docker compose up -d`.
 
 ---
 
@@ -91,20 +104,10 @@ make dev-server    # Web UI at http://localhost:8000
 
 ### Run directly (bypassing make)
 
-**CLI mode:**
 ```bash
-python main.py
-```
-
-**Web UI mode:**
-```bash
-python main.py --server
-# Open http://localhost:8000
-```
-
-**Single message:**
-```bash
-python main.py --message "What is sqrt(256) * 3?"
+python main.py                                  # CLI chat
+python main.py --server                         # Web UI at http://localhost:8000
+python main.py --message "What is sqrt(256)?"   # Single question, then exit
 ```
 
 ---
@@ -115,9 +118,11 @@ python main.py --message "What is sqrt(256) * 3?"
 
 | Command | What it does |
 |---|---|
-| `make build` | Build the Docker image |
-| `make run` | **Start web UI** → `http://localhost:8000` |
-| `make run-cli` | Start interactive CLI chat inside Docker |
+| `make up` | **Start everything with Docker Compose** (recommended) |
+| `make down` | Stop the Compose stack |
+| `make build` | Build the Docker image only |
+| `make run` | Start web UI (plain `docker run`, no Compose) |
+| `make run-cli` | Interactive CLI chat inside Docker |
 | `make run-msg MSG="..."` | Send one question, print answer, exit |
 | `make stop` | Stop the running container |
 | `make logs` | Follow container logs live |
@@ -127,11 +132,13 @@ python main.py --message "What is sqrt(256) * 3?"
 | `make dev` | Run CLI locally (no Docker, uses venv) |
 | `make dev-server` | Run web server locally (no Docker) |
 
-### Docker folder structure
+### Docker files
 
 ```
+docker-compose.yml   ← One-command stack: server + optional CLI profile
+.dockerignore        ← Keeps build context small (excludes .venv, .git, ...)
 docker/
-├── Dockerfile       ← Multi-stage build (builder + slim runtime)
+├── Dockerfile       ← Multi-stage build (builder + slim runtime, non-root user)
 └── entrypoint.sh    ← Startup script: validates env, picks run mode
 ```
 
@@ -139,8 +146,8 @@ docker/
 
 | Mode | How to use |
 |---|---|
-| `server` | `make run` — default, starts web UI |
-| `cli` | `make run-cli` — interactive terminal chat |
+| `server` | default — starts the web UI + API |
+| `cli` | `docker compose run --rm cli` — interactive terminal chat |
 | `message` | `make run-msg MSG="What is 2+2?"` — single question |
 
 ---
@@ -152,21 +159,21 @@ hello_agent/
 │
 ├── agent/                    ← CORE AGENT LOGIC
 │   ├── core.py               ← ★ THE REACT LOOP (start here!)
-│   ├── memory.py             ← Conversation history
+│   ├── memory.py             ← Conversation history (sliding window)
 │   └── tools/
 │       ├── registry.py       ← @tool() decorator system
-│       ├── calculator.py     ← Math tool
-│       ├── weather.py        ← Weather tool (mock → real API)
-│       ├── web_search.py     ← Search tool (mock → Tavily/SerpAPI)
-│       └── memory_tool.py    ← Remember/recall facts
+│       ├── calculator.py     ← Math tool (hardened safe-eval)
+│       ├── weather.py        ← LIVE weather via Open-Meteo (no key)
+│       ├── web_search.py     ← LIVE search via DuckDuckGo (no key)
+│       └── memory_tool.py    ← Remember/recall facts (persisted)
 │
 ├── api/
-│   └── server.py             ← FastAPI REST + WebSocket server
+│   └── server.py             ← FastAPI REST + WebSocket server (non-blocking)
 │
 ├── web/
 │   ├── index.html            ← Chat UI
 │   ├── style.css             ← Dark glassmorphism design
-│   └── app.js                ← WebSocket + real-time rendering
+│   └── app.js                ← WebSocket streaming + thinking spinner
 │
 ├── docker/
 │   ├── Dockerfile            ← Multi-stage image build
@@ -175,11 +182,16 @@ hello_agent/
 ├── data/                     ← Auto-created, stores long-term memory
 │   └── memory.json
 │
-├── Makefile                  ← make build / run / run-cli / clean ...
+├── docs/
+│   └── web-ui.png            ← Screenshot of the web interface
+│
+├── docker-compose.yml        ← One-command full stack
+├── Makefile                  ← make up / down / dev / clean ...
 ├── config.py                 ← All settings (reads from .env)
 ├── main.py                   ← CLI entry point
 ├── requirements.txt
 ├── .env.example
+├── AI_AGENT_GUIDE.md         ← Concepts explained for non-engineers
 └── README.md                 ← You are here
 ```
 
@@ -204,6 +216,7 @@ Agent thinks:
 ```
 
 This loop is in `agent/core.py`. Read it — it's ~100 lines and teaches you everything.
+The agent chains tools too: ask a two-part question and it will call the calculator *and* the weather tool before answering.
 
 ---
 
@@ -233,37 +246,17 @@ That's it. The agent will automatically know about and use your tool.
 
 ---
 
-## 🔌 Connecting Real APIs
+## 🔌 The Data Sources (Already Real!)
 
-The tools are mocked for demo purposes. Replace them with real APIs:
+Unlike most tutorial projects, the tools here hit **real APIs out of the box** — no extra keys needed:
 
-### Real Web Search (Tavily — Free Tier)
-```bash
-pip install tavily-python
-```
-```python
-# In agent/tools/web_search.py
-from tavily import TavilyClient
-client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
+| Tool | Backend | Upgrade path |
+|---|---|---|
+| `web_search` | DuckDuckGo via [`ddgs`](https://pypi.org/project/ddgs/) | Swap in [Tavily](https://tavily.com) for higher-quality results (free tier, needs key) |
+| `get_weather` | [Open-Meteo](https://open-meteo.com) geocoding + forecast | Already real — any city worldwide |
+| LLM | Gemini 2.5 Flash (free tier) | `LLM_MODEL=gemini-2.5-pro` in `.env` for a more powerful model |
 
-def web_search(query: str) -> str:
-    results = client.search(query)
-    return results["answer"]
-```
-
-### Real Weather (OpenWeatherMap — Free Tier)
-```bash
-# In agent/tools/weather.py
-import httpx
-resp = httpx.get(f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={KEY}")
-```
-
-### Different LLM
-```python
-# In config.py — switch to any model:
-LLM_MODEL = "gemini-1.5-pro"     # More powerful
-LLM_MODEL = "gemini-2.0-flash"   # Faster/cheaper (default)
-```
+**Note on demo mode:** if `GEMINI_API_KEY` is missing or invalid, the agent falls back to a keyword-based mock "brain" so the ReAct loop is still demonstrable — but answers will be canned. With a valid key, everything is real.
 
 ---
 
@@ -278,22 +271,26 @@ This reference shows the fundamentals. Production agents add:
 | **Streaming LLM** | Use `generate_content_stream()` in Gemini |
 | **Auth** | Add FastAPI middleware |
 | **Database** | Replace `memory.json` with PostgreSQL |
-| **Deployment** | Dockerize + deploy to Cloud Run / ECS |
+| **Rate-limit resilience** | Retry with exponential backoff on 429 errors |
+| **Deployment** | Already Dockerized — deploy to Cloud Run / ECS |
 
 ---
 
 ## 🧪 Testing
 
 ```bash
-# Run all tests
-pytest tests/
-
-# Test a specific tool
+# Test a specific tool directly
 python -c "from agent.tools.calculator import calculator; print(calculator('2**10'))"
+python -c "from agent.tools.weather import get_weather; print(get_weather('Tokyo'))"
 
-# Test the full agent loop
+# Test the full agent loop end-to-end
 python main.py --message "What is 15% of 340?"
+
+# Check the running server
+curl http://localhost:8000/health
 ```
+
+(`pytest` is included in requirements for when you add a `tests/` directory.)
 
 ---
 
@@ -304,7 +301,17 @@ python main.py --message "What is 15% of 340?"
 3. `agent/memory.py` — How memory works
 4. `agent/core.py` — **The ReAct loop** ← most important
 5. `api/server.py` — How the web server wraps the agent
-6. `agent/tools/calculator.py` — Simple tool example
+6. `agent/tools/weather.py` — A real-API tool example
+
+---
+
+## 📸 Web Interface
+
+This is what you get at `http://localhost:8000` — a dark-themed chat UI with the agent's tools and architecture explorable from the sidebar. While the agent works, a spinner shows its progress ("Thinking… → Using web_search…"), and only the clean final answer lands in the chat:
+
+<p align="center">
+  <img src="docs/web-ui.png" alt="Darshan-AI web interface — chat panel with suggestion chips, tool and architecture panels in the sidebar, and the Gemini model badge" width="720" />
+</p>
 
 ---
 

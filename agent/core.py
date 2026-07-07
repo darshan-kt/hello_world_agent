@@ -77,14 +77,13 @@ class Agent:
         """Combine base system prompt with tool descriptions."""
         return f"{config.SYSTEM_PROMPT}\n\n{tools_prompt()}"
 
-    def _build_full_prompt(self, user_message: str) -> str:
+    def _build_full_prompt(self) -> str:
         """
         Build the complete prompt string sent to the LLM.
 
         Structure:
           [System Prompt + Tools]
-          [Conversation History]
-          [Current User Message]
+          [Conversation History — already includes the current user message]
         """
         parts = [self._build_system_prompt(), "\n---\n"]
 
@@ -95,8 +94,6 @@ class Agent:
             elif msg.role in ("assistant", "tool"):
                 parts.append(f"Assistant: {msg.content}")
 
-        # Add current message
-        parts.append(f"\nUser: {user_message}")
         parts.append("Assistant:")
 
         return "\n".join(parts)
@@ -129,7 +126,7 @@ class Agent:
 
         # Extract Action + Action Input
         action_match = re.search(r"Action:\s*(\w+)", response_text)
-        input_match  = re.search(r"Action Input:\s*(\{.+?\}|\".+?\")", response_text, re.DOTALL)
+        input_match  = re.search(r"Action Input:\s*(\{.*\}|\".+?\")", response_text, re.DOTALL)
 
         if action_match:
             result["action"] = action_match.group(1).strip()
@@ -164,25 +161,32 @@ class Agent:
 
         for iteration in range(config.MAX_ITERATIONS):
             # ── THINK ──────────────────────────────────────────────
-            prompt = self._build_full_prompt(user_message if iteration == 0 else "")
+            prompt = self._build_full_prompt()
             try:
                 response = self.client.models.generate_content(
                     model=self.model_name,
                     contents=prompt,
                     config=self.gen_config,
                 )
-                llm_text = response.text
+                llm_text = response.text or ""
+                if not llm_text:
+                    yield AgentStep(
+                        "error",
+                        "LLM returned an empty response (possibly blocked by safety filters). "
+                        "Try rephrasing your message.",
+                    )
+                    return
             except Exception as e:
-                # In sandbox environments, API keys are often redacted or invalid. 
+                # In sandbox environments, API keys are often redacted or invalid.
                 # Provide a dynamic mock response so the user can see the loop in action!
-                if "API key not valid" in str(e) or "400" in str(e):
+                if "API key not valid" in str(e) or "API_KEY_INVALID" in str(e):
                     msg = user_message.lower() if user_message else ""
                     last_msg = self.memory.get_history()[-1] if self.memory.get_history() else None
                     
                     if last_msg and last_msg.role == "tool":
                         llm_text = f'Thought: I have the data now from the tool.\nFinal Answer: Based on the data: {last_msg.content}'
                     elif "weather" in msg:
-                        city = msg.split("weather in ")[-1].strip() if "weather in " in msg else "unknown"
+                        city = msg.split("weather in ")[-1].strip().rstrip("?.!,") if "weather in " in msg else "unknown"
                         llm_text = f'Thought: The user wants the weather. I will use the weather tool.\nAction: get_weather\nAction Input: {{"city": "{city}"}}'
                     elif "calculate" in msg or "math" in msg or "+" in msg or "*" in msg:
                         llm_text = f'Thought: The user wants math. I will use the calculator.\nAction: calculator\nAction Input: {{"expression": "42"}}'
@@ -220,10 +224,6 @@ class Agent:
                 # Feed observation back into the prompt as context
                 obs_text = f"Observation from {tool_name}: {observation}"
                 self.memory.add("tool", obs_text, tool_name=tool_name)
-
-                # Update user_message to empty so subsequent iterations
-                # build from memory context
-                user_message = ""
                 continue
 
             # No action, no answer — LLM gave something unexpected
