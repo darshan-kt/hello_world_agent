@@ -1,5 +1,5 @@
 /**
- * app.js — Hello Agent Web UI
+ * app.js — Darshan-AI Hospital Assistant Web UI
  * Connects to the FastAPI WebSocket and renders the ReAct loop in real time.
  */
 
@@ -11,6 +11,9 @@ let isThinking = false;
 let currentStepsContainer = null;
 let currentAgentBubble = null;
 let typingIndicator = null;
+let patientsLoaded = false;
+let patientSearchDebounce = null;
+let currentDrawerPatientId = null;
 
 const TOOL_ICONS = {
   calculator:    { icon: '🔢', cls: 'calc' },
@@ -166,7 +169,7 @@ function appendFinalAnswer(text) {
     // Keep steps but add the final answer below
     const answerEl = createElement('div', 'bubble-content');
     answerEl.style.marginTop = currentStepsContainer.children.length ? '12px' : '0';
-    answerEl.innerHTML = markdownToHtml(text);
+    answerEl.innerHTML = markdownToHtml(escapeHtml(text));
     currentAgentBubble.append(answerEl);
     scrollToBottom();
   }
@@ -179,10 +182,17 @@ function showTypingIndicator() {
   if (typingIndicator) return;
   const group = createElement('div', 'message-group agent-group');
   const indicator = createElement('div', 'typing-indicator');
-  const spinner = createElement('div', 'spinner');
+
+  const loader = createElement('div', 'vitals-loader');
+  loader.innerHTML = `
+    <div class="ring"></div>
+    <div class="ring delay"></div>
+    <div class="core"></div>
+  `;
+
   const label = createElement('span', 'typing-label');
   label.textContent = 'Thinking…';
-  indicator.append(spinner, label);
+  indicator.append(loader, label);
   group.append(indicator);
   group.id = 'typing-group';
   document.getElementById('chat-container').append(group);
@@ -287,7 +297,7 @@ function sendSuggestion(el) {
 function startThinking() {
   isThinking = true;
   document.getElementById('send-btn').disabled = true;
-  document.getElementById('agent-avatar').style.boxShadow = '0 0 30px rgba(124,106,247,0.8)';
+  document.getElementById('agent-avatar').style.boxShadow = '0 0 30px rgba(20,184,166,0.8)';
 }
 
 function finishThinking() {
@@ -326,6 +336,11 @@ function showPanel(name) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById(`panel-${name}`).classList.add('active');
   document.getElementById(`btn-${name}`).classList.add('active');
+
+  if (name === 'patients' && !patientsLoaded) {
+    patientsLoaded = true;
+    loadPatients();
+  }
 }
 
 // ──────────────────────────────────────────────
@@ -367,6 +382,191 @@ function renderTools(tools) {
 }
 
 // ──────────────────────────────────────────────
+// Patients Panel — instant DB browsing (no LLM call)
+// ──────────────────────────────────────────────
+async function loadPatients() {
+  await fetchPatients('');
+}
+
+function searchPatients(query) {
+  clearTimeout(patientSearchDebounce);
+  patientSearchDebounce = setTimeout(() => fetchPatients(query), 250);
+}
+
+async function fetchPatients(query) {
+  const grid = document.getElementById('patients-grid');
+  try {
+    const resp = await fetch(`/patients?query=${encodeURIComponent(query)}&limit=100`);
+    const data = await resp.json();
+    renderPatients(data.patients);
+  } catch (e) {
+    grid.innerHTML = `<div class="patients-empty">⚠️ Could not load patients: ${e.message}</div>`;
+  }
+}
+
+function renderPatients(patients) {
+  const grid = document.getElementById('patients-grid');
+  const count = document.getElementById('patients-count');
+  count.textContent = `${patients.length} patient${patients.length === 1 ? '' : 's'}`;
+
+  if (!patients.length) {
+    grid.innerHTML = '<div class="patients-empty">No patients match that search.</div>';
+    return;
+  }
+
+  grid.innerHTML = '';
+  patients.forEach((p, i) => {
+    const card = createElement('div', 'patient-card');
+    card.style.animationDelay = `${Math.min(i * 30, 300)}ms`;
+    card.onclick = () => openPatientDrawer(p.patient_id);
+    card.innerHTML = `
+      <div class="patient-avatar" style="background: ${avatarGradient(p.patient_id)}">${initials(p.name)}</div>
+      <div class="patient-card-body">
+        <div class="patient-card-name">${escapeHtml(p.name)}</div>
+        <div class="patient-card-meta">
+          <span>ID ${p.patient_id} · ${p.age}y · ${escapeHtml(p.gender)}</span>
+          <span class="blood-badge ${bloodBadgeClass(p.blood_group)}">${escapeHtml(p.blood_group)}</span>
+        </div>
+      </div>
+    `;
+    grid.append(card);
+  });
+}
+
+function initials(name) {
+  return name.split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+}
+
+function bloodBadgeClass(bloodGroup) {
+  const letter = (bloodGroup || '').replace(/[+-]/, '');
+  if (letter === 'AB') return 'grp-ab';
+  if (letter === 'A') return 'grp-a';
+  if (letter === 'B') return 'grp-b';
+  return 'grp-o';
+}
+
+function avatarGradient(seed) {
+  // Deterministic hue per patient ID so avatars aren't all identical.
+  const hue = (seed * 47) % 360;
+  return `linear-gradient(135deg, hsl(${hue}, 60%, 42%), hsl(${(hue + 40) % 360}, 65%, 52%))`;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ── Patient Detail Drawer ───────────────────────
+async function openPatientDrawer(patientId) {
+  currentDrawerPatientId = patientId;
+  document.getElementById('drawer-backdrop').classList.add('open');
+  document.getElementById('patient-drawer').classList.add('open');
+  document.getElementById('drawer-body').innerHTML = '<div class="drawer-empty">Loading record…</div>';
+
+  try {
+    const resp = await fetch(`/patients/${patientId}`);
+    const record = await resp.json();
+    if (!resp.ok) throw new Error(record.detail || 'Patient not found');
+    if (currentDrawerPatientId === patientId) renderDrawer(record);
+  } catch (e) {
+    document.getElementById('drawer-body').innerHTML =
+      `<div class="drawer-empty">⚠️ Could not load patient: ${e.message}</div>`;
+  }
+}
+
+function closeDrawer() {
+  document.getElementById('drawer-backdrop').classList.remove('open');
+  document.getElementById('patient-drawer').classList.remove('open');
+  currentDrawerPatientId = null;
+}
+
+function renderDrawer(record) {
+  const p = record.patient;
+  document.getElementById('drawer-avatar').textContent = initials(p.name);
+  document.getElementById('drawer-avatar').style.background = avatarGradient(p.patient_id);
+  document.getElementById('drawer-name').textContent = p.name;
+  document.getElementById('drawer-sub').innerHTML =
+    `ID ${p.patient_id} · ${p.age}y · ${escapeHtml(p.gender)} · ` +
+    `<span class="blood-badge ${bloodBadgeClass(p.blood_group)}">${escapeHtml(p.blood_group)}</span> · ${escapeHtml(p.phone)}`;
+
+  const body = document.getElementById('drawer-body');
+  body.innerHTML = '';
+
+  body.append(
+    aiSummarySection(p.patient_id),
+    drawerSection('🏨 Admissions', record.admissions.map(a =>
+      recordRow(a.diagnosis, `${a.admission_date} → ${a.discharge_date} · ${a.ward}`))),
+    drawerSection('💊 Prescriptions', record.prescriptions.map(rx =>
+      recordRow(`${rx.medicine} (${rx.dosage})`, `Prescribed ${rx.prescribed_date} by ${rx.prescribed_by}`))),
+    drawerSection('🧪 Lab Reports', record.lab_reports.map(lab =>
+      recordRow(`${lab.test_name}: ${lab.result}`, `Normal range ${lab.normal_range} · ${lab.test_date}`))),
+    drawerSection('🔪 Surgeries', record.surgeries.map(s =>
+      recordRow(s.surgery_name, `${s.surgery_date} by ${s.surgeon} · ${s.outcome}`))),
+    drawerSection('📄 Documents', record.documents.map(d =>
+      recordRow(`${d.document_type}: ${d.title}`, d.created_date))),
+  );
+}
+
+function drawerSection(title, rowElements) {
+  const section = createElement('div');
+  const heading = createElement('div', 'drawer-section-title');
+  heading.textContent = title;
+  section.append(heading);
+
+  if (!rowElements.length) {
+    const empty = createElement('div', 'drawer-empty');
+    empty.textContent = 'None on record.';
+    section.append(empty);
+  } else {
+    rowElements.forEach(el => section.append(el));
+  }
+  return section;
+}
+
+function recordRow(main, sub) {
+  const row = createElement('div', 'record-row');
+  const mainEl = createElement('div', 'rr-main');
+  mainEl.textContent = main;
+  const subEl = createElement('div', 'rr-sub');
+  subEl.textContent = sub;
+  row.append(mainEl, subEl);
+  return row;
+}
+
+function aiSummarySection(patientId) {
+  const section = createElement('div');
+  const heading = createElement('div', 'drawer-section-title');
+  heading.textContent = '✨ AI Summary';
+  const btn = createElement('button', 'ai-summary-btn');
+  btn.textContent = '✨ Generate AI Summary';
+  btn.onclick = () => generateAiSummary(patientId, section, btn);
+  section.append(heading, btn);
+  return section;
+}
+
+async function generateAiSummary(patientId, section, btn) {
+  btn.disabled = true;
+  btn.textContent = '⏳ Analyzing records + documents…';
+
+  try {
+    const resp = await fetch(`/patients/${patientId}/summary`);
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || 'Summary generation failed');
+    if (currentDrawerPatientId !== patientId) return; // drawer moved on while we waited
+
+    btn.remove();
+    const card = createElement('div', 'ai-summary-card');
+    card.innerHTML = markdownToHtml(escapeHtml(data.summary));
+    section.append(card);
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = '✨ Generate AI Summary';
+    showToast(`⚠️ ${e.message}`);
+  }
+}
+
+// ──────────────────────────────────────────────
 // Keyboard Handling
 // ──────────────────────────────────────────────
 function handleKeydown(e) {
@@ -375,6 +575,10 @@ function handleKeydown(e) {
     sendMessage();
   }
 }
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeDrawer();
+});
 
 function autoResize(el) {
   el.style.height = 'auto';

@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hello Agent — AI Agent Reference Project</title>
-  <meta name="description" content="A reference AI agent built with the ReAct pattern. Includes tools, memory, and a beautiful chat interface." />
+  <title>Darshan-AI — Hospital Assistant</title>
+  <meta name="description" content="An AI hospital assistant built with the ReAct pattern — patient records, RAG-powered document search, and a live chat interface." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -17,7 +17,7 @@
   <div class="sidebar-header">
     <div class="agent-avatar" id="agent-avatar">
       <div class="avatar-pulse"></div>
-      <span class="avatar-icon">🤖</span>
+      <span class="avatar-icon">🩺</span>
     </div>
     <div class="agent-info">
       <h2 class="agent-name" id="agent-name">Darshan-AI</h2>
@@ -28,9 +28,19 @@
     </div>
   </div>
 
+  <div class="ecg-strip" aria-hidden="true">
+    <svg viewBox="0 0 200 40" preserveAspectRatio="none" class="ecg-svg">
+      <path class="ecg-path" d="M0,20 L16,20 L20,20 L23,9 L26,31 L29,14 L32,20 L46,20 L50,20 L53,15 L56,20 L100,20
+                                 L116,20 L120,20 L123,9 L126,31 L129,14 L132,20 L146,20 L150,20 L153,15 L156,20 L200,20" />
+    </svg>
+  </div>
+
   <nav class="sidebar-nav">
     <button class="nav-btn active" id="btn-chat" onclick="showPanel('chat')">
       <span class="nav-icon">💬</span> Chat
+    </button>
+    <button class="nav-btn" id="btn-patients" onclick="showPanel('patients')">
+      <span class="nav-icon">🏥</span> Patients
     </button>
     <button class="nav-btn" id="btn-tools" onclick="showPanel('tools')">
       <span class="nav-icon">🔧</span> Tools
@@ -57,8 +67,8 @@
   <!-- Chat Panel -->
   <section class="panel active" id="panel-chat">
     <div class="panel-header">
-      <h1 class="panel-title">Hello Agent <span class="version-badge">v1.0</span></h1>
-      <p class="panel-subtitle">ReAct-powered AI Agent · Tools · Memory · Hello World Reference</p>
+      <h1 class="panel-title">Hospital Assistant <span class="version-badge">v2.0</span></h1>
+      <p class="panel-subtitle">ReAct-powered AI Agent · Patient Records · RAG Document Search · Live Tools</p>
     </div>
 
     <div class="chat-container" id="chat-container">
@@ -70,14 +80,15 @@
             <span class="bubble-time" id="welcome-time"></span>
           </div>
           <div class="bubble-content">
-            <p>👋 Hello! I'm <strong>Darshan-AI</strong>, a reference AI agent built with the <strong>ReAct pattern</strong>.</p>
-            <p>I can use tools to help you. Try asking me:</p>
+            <p>👋 Hi, I'm <strong>Darshan-AI</strong> — your hospital assistant. I can look up patient records, search clinical documents, and generate AI summaries, on top of general tools like math, weather, and web search.</p>
+            <p>Try asking me:</p>
             <ul class="suggestions">
-              <li onclick="sendSuggestion(this)">🔢 What is 256 × 17 + 99?</li>
-              <li onclick="sendSuggestion(this)">🌤️ What's the weather in Tokyo?</li>
-              <li onclick="sendSuggestion(this)">🔍 Search: What is an AI agent?</li>
-              <li onclick="sendSuggestion(this)">🧠 Remember that my name is Darshan</li>
-              <li onclick="sendSuggestion(this)">💡 What tools do you have?</li>
+              <li onclick="sendSuggestion(this)"><span class="sugg-icon">🔍</span> Find a patient named Sharma</li>
+              <li onclick="sendSuggestion(this)"><span class="sugg-icon">📋</span> Summarize patient 1's medical history</li>
+              <li onclick="sendSuggestion(this)"><span class="sugg-icon">📄</span> Any doctor's notes about fatigue for patient 3?</li>
+              <li onclick="sendSuggestion(this)"><span class="sugg-icon">🌤️</span> What's the weather in Tokyo?</li>
+              <li onclick="sendSuggestion(this)"><span class="sugg-icon">🔢</span> What is 256 × 17 + 99?</li>
+              <li onclick="sendSuggestion(this)"><span class="sugg-icon">💡</span> What tools do you have?</li>
             </ul>
           </div>
         </div>
@@ -89,7 +100,7 @@
         <textarea
           id="user-input"
           class="user-input"
-          placeholder="Ask me anything… I'll think, use tools, and answer."
+          placeholder="Ask about a patient, or anything else… I'll think, use tools, and answer."
           rows="1"
           onkeydown="handleKeydown(event)"
           oninput="autoResize(this)"
@@ -99,6 +110,24 @@
         </button>
       </div>
       <div class="input-hint">Press <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for new line</div>
+    </div>
+  </section>
+
+  <!-- Patients Panel -->
+  <section class="panel" id="panel-patients">
+    <div class="panel-header">
+      <h1 class="panel-title">Patients <span class="version-badge">🏥 25 on file</span></h1>
+      <p class="panel-subtitle">Browse instantly (no AI call) · Click a patient for their full chart + AI summary</p>
+    </div>
+    <div class="patients-toolbar">
+      <div class="patients-search">
+        <span class="patients-search-icon">🔍</span>
+        <input type="text" id="patients-search-input" placeholder="Search by name or patient ID…" oninput="searchPatients(this.value)" />
+      </div>
+      <div class="patients-count" id="patients-count"></div>
+    </div>
+    <div class="patients-grid" id="patients-grid">
+      <div class="patients-loading">Loading patients…</div>
     </div>
   </section>
 
@@ -200,7 +229,8 @@
 │       ├── calculator.py    <span class="f-cm">← Math tool</span>
 │       ├── weather.py       <span class="f-cm">← Weather tool</span>
 │       ├── web_search.py    <span class="f-cm">← Search tool</span>
-│       └── memory_tool.py   <span class="f-cm">← Remember/recall</span>
+│       ├── memory_tool.py   <span class="f-cm">← Remember/recall</span>
+│       └── hospital.py      <span class="f-cm">← Patient records + RAG</span>
 ├── <span class="f-dir">api/</span>
 │   └── <span class="f-key">server.py</span>        <span class="f-cm">← FastAPI backend</span>
 ├── <span class="f-dir">web/</span>             <span class="f-cm">← This UI</span>
@@ -212,6 +242,24 @@
   </section>
 
 </main>
+
+<!-- Patient Detail Drawer -->
+<div class="drawer-backdrop" id="drawer-backdrop" onclick="closeDrawer()"></div>
+<aside class="patient-drawer" id="patient-drawer">
+  <div class="drawer-header">
+    <div class="drawer-title">
+      <div class="patient-avatar" id="drawer-avatar">?</div>
+      <div>
+        <div class="drawer-name" id="drawer-name">—</div>
+        <div class="drawer-sub" id="drawer-sub">—</div>
+      </div>
+    </div>
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="drawer-body" id="drawer-body">
+    <!-- populated by app.js -->
+  </div>
+</aside>
 
 <script src="/static/app.js"></script>
 </body>
