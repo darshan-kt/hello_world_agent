@@ -33,15 +33,20 @@ Every effective AI agent requires three main components. Think of it like buildi
 The agent needs a Large Language Model to process language, understand the user's intent, and make logical decisions. This project uses **Google Gemini 2.5 Flash** (free tier) — but the architecture works with any LLM.
 
 ### 🧰 2. The Hands (Tools)
-Tools are how the agent interacts with the real world. `hello_agent` ships with **five real tools**:
+Tools are how the agent interacts with the real world. `hello_agent` is a **hospital assistant**, so most
+of its tools are healthcare-focused, plus a few general-purpose ones for convenience:
 
 | Tool | What it does | Powered by |
 | :--- | :--- | :--- |
+| **search_patient / get_patient_record** | Find a patient and pull their full medical record | SQLite (synthetic patient DB) |
+| **search_patient_documents** | Search a patient's discharge summaries, scans, and notes | Keyword-overlap RAG over real text |
+| **list_doctors / search_doctor / get_doctor_profile** | Find a specialist and see their qualifications, weekly schedule, and recent patients | SQLite (synthetic doctor DB) |
 | **calculator** | Accurate math (LLMs are bad at arithmetic!) | Safe Python evaluation |
 | **web_search** | Look up real-time information on the internet | DuckDuckGo (free, no API key) |
 | **get_weather** | Live weather for any city worldwide | Open-Meteo (free, no API key) |
 | **remember / recall** | Store and retrieve facts about the user | JSON file on disk |
-| **list_memories** | Show everything the agent has remembered | JSON file on disk |
+
+See [HOSPITAL_RAG_ARCHITECTURE.md](HOSPITAL_RAG_ARCHITECTURE.md) for the full patient + doctor data model.
 
 ### 💾 3. The Notebook (Memory)
 To hold a conversation, the agent needs to remember what was said five minutes ago.
@@ -102,10 +107,15 @@ docker compose up -d        # → open http://localhost:8000
 ```
 
 Things to try in the chat:
+- *"Which cardiologists are available today?"* → filters doctors by specialty + schedule
+- *"Summarize patient 1's medical history, including any scan findings"* → chains patient + document tools
+- *"Tell me about Dr. Krishnan's qualifications"* → doctor profile lookup
 - *"What is 15% of 340?"* → watch it use the calculator
-- *"Who won the last football World Cup?"* → real web search
-- *"What's the weather in Tokyo right now?"* → live weather data
 - *"Remember that my favorite color is blue"* → then ask about it tomorrow!
+
+Or skip the chat entirely — click **Patients** or **Doctors** in the sidebar to browse the synthetic
+hospital records directly (instant, no AI call), then click any card for a full chart/profile and an
+optional **✨ Generate AI Summary** button.
 
 > [!TIP]
 > **Career Advice for AI Builders:**

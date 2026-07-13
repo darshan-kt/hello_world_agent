@@ -14,19 +14,28 @@ let typingIndicator = null;
 let patientsLoaded = false;
 let patientSearchDebounce = null;
 let currentDrawerPatientId = null;
+let doctorsLoaded = false;
+let doctorSearchDebounce = null;
+let currentDrawerDoctorId = null;
+let allDoctors = [];
+let activeSpecialtyFilter = '';
 
+// Small emoji prefix shown next to "Using <tool>…" in the thinking indicator.
 const TOOL_ICONS = {
-  calculator:    { icon: '🔢', cls: 'calc' },
-  get_weather:   { icon: '🌤️', cls: 'weather' },
-  web_search:    { icon: '🔍', cls: 'search' },
-  remember:      { icon: '🧠', cls: 'memory' },
-  recall:        { icon: '🧠', cls: 'memory' },
-  list_memories: { icon: '📋', cls: 'memory' },
-  list_patients:          { icon: '🏥', cls: 'hospital' },
-  search_patient:         { icon: '🏥', cls: 'hospital' },
-  get_patient_record:     { icon: '🏥', cls: 'hospital' },
-  list_patient_documents: { icon: '📄', cls: 'hospital' },
-  search_patient_documents:{ icon: '📄', cls: 'hospital' },
+  calculator: '🔢',
+  get_weather: '🌤️',
+  web_search: '🔍',
+  remember: '🧠',
+  recall: '🧠',
+  list_memories: '📋',
+  list_patients: '🏥',
+  search_patient: '🏥',
+  get_patient_record: '🏥',
+  list_patient_documents: '📄',
+  search_patient_documents: '📄',
+  list_doctors: '🩺',
+  search_doctor: '🩺',
+  get_doctor_profile: '🩺',
 };
 
 // ──────────────────────────────────────────────
@@ -40,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
   connectWebSocket();
 
   // Load tools
-  loadTools();
+  loadAgentInfo();
 
   // Voice input
   initVoiceInput();
@@ -95,8 +104,8 @@ function handleAgentStep(step) {
       break;
 
     case 'action': {
-      const meta = TOOL_ICONS[step.tool_name];
-      updateTypingLabel(`${meta ? meta.icon + ' ' : ''}Using ${step.tool_name}…`);
+      const icon = TOOL_ICONS[step.tool_name];
+      updateTypingLabel(`${icon ? icon + ' ' : ''}Using ${step.tool_name}…`);
       break;
     }
 
@@ -423,43 +432,23 @@ function showPanel(name) {
     patientsLoaded = true;
     loadPatients();
   }
-}
-
-// ──────────────────────────────────────────────
-// Load Tools
-// ──────────────────────────────────────────────
-async function loadTools() {
-  try {
-    const resp = await fetch('/tools');
-    const tools = await resp.json();
-    renderTools(tools);
-
-    // Update model badge
-    const health = await fetch('/health');
-    const data = await health.json();
-    document.getElementById('agent-name').textContent = data.agent;
-    document.getElementById('model-name').textContent = data.model;
-  } catch (e) {
-    console.warn('Could not load tools:', e);
+  if (name === 'doctors' && !doctorsLoaded) {
+    doctorsLoaded = true;
+    loadDoctors();
   }
 }
 
-function renderTools(tools) {
-  const grid = document.getElementById('tools-grid');
-  grid.innerHTML = '';
-
-  for (const [name, tool] of Object.entries(tools)) {
-    const meta = TOOL_ICONS[name] || { icon: '🔧', cls: 'default' };
-    const card = createElement('div', 'tool-card');
-    card.innerHTML = `
-      <div class="tool-card-header">
-        <div class="tool-icon ${meta.cls}">${meta.icon}</div>
-        <div class="tool-name">${name}</div>
-      </div>
-      <div class="tool-desc">${tool.description}</div>
-      <div class="tool-params">${JSON.stringify(tool.parameters, null, 2)}</div>
-    `;
-    grid.append(card);
+// ──────────────────────────────────────────────
+// Agent Info (sidebar name/model badge)
+// ──────────────────────────────────────────────
+async function loadAgentInfo() {
+  try {
+    const resp = await fetch('/health');
+    const data = await resp.json();
+    document.getElementById('agent-name').textContent = data.agent;
+    document.getElementById('model-name').textContent = data.model;
+  } catch (e) {
+    console.warn('Could not load agent info:', e);
   }
 }
 
@@ -649,6 +638,203 @@ async function generateAiSummary(patientId, section, btn) {
 }
 
 // ──────────────────────────────────────────────
+// Doctors Panel — instant DB browsing (no LLM call)
+// ──────────────────────────────────────────────
+async function loadDoctors() {
+  await fetchDoctors();
+}
+
+function searchDoctors(query) {
+  clearTimeout(doctorSearchDebounce);
+  doctorSearchDebounce = setTimeout(() => fetchDoctors(query), 250);
+}
+
+async function fetchDoctors(query = '') {
+  const grid = document.getElementById('doctors-grid');
+  try {
+    const params = new URLSearchParams({ query, specialty: activeSpecialtyFilter, limit: 100 });
+    const resp = await fetch(`/doctors?${params}`);
+    const data = await resp.json();
+    allDoctors = data.doctors;
+    if (!document.getElementById('specialty-chips').children.length) renderSpecialtyChips();
+    renderDoctors(allDoctors);
+  } catch (e) {
+    grid.innerHTML = `<div class="patients-empty">⚠️ Could not load doctors: ${e.message}</div>`;
+  }
+}
+
+function renderSpecialtyChips() {
+  // Fixed roster of 12 specialties across 14 doctors — fetch once, unfiltered, to build the chip set.
+  fetch('/doctors?limit=100').then(r => r.json()).then(data => {
+    const specialties = [...new Set(data.doctors.map(d => d.specialty))].sort();
+    const container = document.getElementById('specialty-chips');
+    container.innerHTML = '';
+
+    const allChip = createElement('button', 'specialty-chip active');
+    allChip.textContent = 'All Specialties';
+    allChip.onclick = () => selectSpecialty('', allChip);
+    container.append(allChip);
+
+    specialties.forEach(spec => {
+      const chip = createElement('button', 'specialty-chip');
+      chip.textContent = spec;
+      chip.onclick = () => selectSpecialty(spec, chip);
+      container.append(chip);
+    });
+  });
+}
+
+function selectSpecialty(specialty, chipEl) {
+  activeSpecialtyFilter = specialty;
+  document.querySelectorAll('.specialty-chip').forEach(c => c.classList.remove('active'));
+  chipEl.classList.add('active');
+  fetchDoctors(document.getElementById('doctors-search-input').value);
+}
+
+function isAvailableNow(availability) {
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const now = new Date();
+  const today = days[now.getDay()];
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  return (availability || []).some(a => {
+    if (a.day_of_week !== today) return false;
+    const [sh, sm] = a.start_time.split(':').map(Number);
+    const [eh, em] = a.end_time.split(':').map(Number);
+    return nowMinutes >= sh * 60 + sm && nowMinutes <= eh * 60 + em;
+  });
+}
+
+function renderDoctors(doctors) {
+  const grid = document.getElementById('doctors-grid');
+  const count = document.getElementById('doctors-count');
+  count.textContent = `${doctors.length} doctor${doctors.length === 1 ? '' : 's'}`;
+
+  if (!doctors.length) {
+    grid.innerHTML = '<div class="patients-empty">No doctors match that search.</div>';
+    return;
+  }
+
+  grid.innerHTML = '';
+  doctors.forEach((d, i) => {
+    const available = isAvailableNow(d.availability);
+    const card = createElement('div', 'patient-card');
+    card.style.animationDelay = `${Math.min(i * 30, 300)}ms`;
+    card.style.alignItems = 'flex-start';
+    card.onclick = () => openDoctorDrawer(d.doctor_id);
+    card.innerHTML = `
+      <div class="patient-avatar" style="background: ${avatarGradient(d.doctor_id * 7)}">${initials(d.name)}</div>
+      <div class="patient-card-body">
+        <div class="patient-card-name">${escapeHtml(d.name)}</div>
+        <div class="doctor-card-specialty">${escapeHtml(d.specialty)}</div>
+        <div class="patient-card-meta">${escapeHtml(d.designation)} · ${d.experience_years}y exp</div>
+        <span class="availability-badge ${available ? 'available' : 'unavailable'}">
+          ${available ? 'Available now' : 'Off right now'}
+        </span>
+      </div>
+    `;
+    grid.append(card);
+  });
+}
+
+// ── Doctor Detail Drawer ────────────────────────
+async function openDoctorDrawer(doctorId) {
+  currentDrawerDoctorId = doctorId;
+  document.getElementById('doctor-drawer-backdrop').classList.add('open');
+  document.getElementById('doctor-drawer').classList.add('open');
+  document.getElementById('doctor-drawer-body').innerHTML = '<div class="drawer-empty">Loading profile…</div>';
+
+  try {
+    const resp = await fetch(`/doctors/${doctorId}`);
+    const record = await resp.json();
+    if (!resp.ok) throw new Error(record.detail || 'Doctor not found');
+    if (currentDrawerDoctorId === doctorId) renderDoctorDrawer(record);
+  } catch (e) {
+    document.getElementById('doctor-drawer-body').innerHTML =
+      `<div class="drawer-empty">⚠️ Could not load doctor: ${e.message}</div>`;
+  }
+}
+
+function closeDoctorDrawer() {
+  document.getElementById('doctor-drawer-backdrop').classList.remove('open');
+  document.getElementById('doctor-drawer').classList.remove('open');
+  currentDrawerDoctorId = null;
+}
+
+function renderDoctorDrawer(record) {
+  const d = record.doctor;
+  const available = isAvailableNow(record.availability);
+  document.getElementById('doctor-drawer-avatar').textContent = initials(d.name);
+  document.getElementById('doctor-drawer-avatar').style.background = avatarGradient(d.doctor_id * 7);
+  document.getElementById('doctor-drawer-name').textContent = d.name;
+  document.getElementById('doctor-drawer-sub').innerHTML =
+    `${escapeHtml(d.specialty)} · ${escapeHtml(d.designation)} · ` +
+    `<span class="availability-badge ${available ? 'available' : 'unavailable'}">${available ? 'Available now' : 'Off right now'}</span>`;
+
+  const body = document.getElementById('doctor-drawer-body');
+  body.innerHTML = '';
+
+  const bioSection = createElement('div');
+  const bioHeading = createElement('div', 'drawer-section-title');
+  bioHeading.textContent = '👨‍⚕️ Profile';
+  const bio = createElement('div', 'doctor-bio');
+  bio.textContent = d.bio;
+  bioSection.append(bioHeading, bio);
+
+  const detailsSection = drawerSection('📋 Details', [
+    recordRow('Qualification', d.qualification),
+    recordRow('Experience', `${d.experience_years} years`),
+    recordRow('From', d.origin),
+    recordRow('Languages', d.languages),
+    recordRow('Contact', `${d.phone} · ${d.email}`),
+  ]);
+
+  const availabilitySection = drawerSection(
+    '🗓️ Weekly Availability',
+    (record.availability || []).map(a => recordRow(`${a.day_of_week}: ${a.start_time}–${a.end_time}`, a.location))
+  );
+
+  const recentSection = drawerSection(
+    '🩺 Recently Consulted Patients',
+    (record.recent_patients || []).map(r =>
+      recordRow(`${r.patient_name} (ID ${r.patient_id})`, `${r.encounter_type}: ${r.description} on ${r.encounter_date}`))
+  );
+
+  body.append(doctorAiSummarySection(d.doctor_id), bioSection, detailsSection, availabilitySection, recentSection);
+}
+
+function doctorAiSummarySection(doctorId) {
+  const section = createElement('div');
+  const heading = createElement('div', 'drawer-section-title');
+  heading.textContent = '✨ AI Summary';
+  const btn = createElement('button', 'ai-summary-btn');
+  btn.textContent = '✨ Generate AI Bio';
+  btn.onclick = () => generateDoctorAiSummary(doctorId, section, btn);
+  section.append(heading, btn);
+  return section;
+}
+
+async function generateDoctorAiSummary(doctorId, section, btn) {
+  btn.disabled = true;
+  btn.textContent = '⏳ Reviewing profile + recent activity…';
+
+  try {
+    const resp = await fetch(`/doctors/${doctorId}/summary`);
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || 'Summary generation failed');
+    if (currentDrawerDoctorId !== doctorId) return;
+
+    btn.remove();
+    const card = createElement('div', 'ai-summary-card');
+    card.innerHTML = markdownToHtml(escapeHtml(data.summary));
+    section.append(card);
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = '✨ Generate AI Bio';
+    showToast(`⚠️ ${e.message}`);
+  }
+}
+
+// ──────────────────────────────────────────────
 // Keyboard Handling
 // ──────────────────────────────────────────────
 function handleKeydown(e) {
@@ -661,6 +847,7 @@ function handleKeydown(e) {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeDrawer();
+    closeDoctorDrawer();
     if (isListening) stopListening();
   }
 });

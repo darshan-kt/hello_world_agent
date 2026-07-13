@@ -1,14 +1,15 @@
-# Hello Agent 🤖 (Darshan-AI)
-### The "Hello World" of AI Agents — Production-Quality Reference Project
+# Darshan-AI 🩺 — Hospital Assistant
+### A focused healthcare AI agent, and a reference for how production agents are built
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green.svg)](https://fastapi.tiangolo.com)
 [![Gemini](https://img.shields.io/badge/LLM-Gemini%202.5%20Flash-purple.svg)](https://aistudio.google.com)
 [![Docker](https://img.shields.io/badge/Docker-Compose%20ready-2496ED.svg)](https://docker.com)
 
-> A real, working AI agent — live web search, live weather, persistent memory —
-> built the same way agents are built at **Google**, **Amazon**, and **OpenAI**.
-> Use this as a reference or starting point for any agent project.
+> A real, working hospital assistant — patient records, a doctor directory with live availability,
+> RAG-powered clinical document search, and voice-enabled chat — built the same way production
+> agents are built at **Google**, **Amazon**, and **OpenAI**. Also a clean reference for the ReAct
+> pattern if you want to learn how agents like this work under the hood.
 
 New to AI agents? Read **[AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)** first — a plain-language walkthrough of the concepts.
 
@@ -39,7 +40,8 @@ This project implements the **ReAct pattern** (Reasoning + Acting), which is the
 | 🧠 **Real LLM** | Google Gemini 2.5 Flash (free tier) |
 | 🔍 **Live Web Search** | Real DuckDuckGo search — no API key needed |
 | 🌤️ **Live Weather** | Real Open-Meteo data for any city — no API key needed |
-| 🏥 **Hospital Tool (POC)** | SQLite-backed patient records — synthetic data only, see note below |
+| 🏥 **Patient Records (POC)** | SQLite-backed records + RAG document search — synthetic data only, see note below |
+| 🩺 **Doctor Directory (POC)** | Specialties, qualifications, live weekly availability, recently consulted patients |
 | 🔧 **Tool System** | Add any function as a tool with the `@tool()` decorator |
 | 💾 **Memory** | Short-term (conversation) + long-term (JSON, survives restarts) |
 | 🌐 **Web UI** | Light clinical chat interface — spinner while thinking, clean final answers |
@@ -174,9 +176,9 @@ hello_agent/
 │   └── server.py             ← FastAPI REST + WebSocket server (non-blocking)
 │
 ├── web/
-│   ├── index.html            ← Chat UI
-│   ├── style.css             ← Dark glassmorphism design
-│   └── app.js                ← WebSocket streaming + thinking spinner
+│   ├── index.html            ← Chat + Patients + Doctors UI
+│   ├── style.css             ← Light clinical design
+│   └── app.js                ← WebSocket streaming, voice input, patient/doctor panels
 │
 ├── docker/
 │   ├── Dockerfile            ← Multi-stage image build
@@ -267,32 +269,41 @@ Unlike most tutorial projects, the tools here hit **real APIs out of the box** �
 
 ---
 
-## 🏥 Hospital Tool (POC)
+## 🏥 Hospital Records — Patients & Doctors (POC)
 
-Demonstrates a SQL-backed tool **plus a lightweight RAG layer**: `agent/tools/hospital.py` auto-creates
-and seeds `data/hospital.db` on first run with 25 **synthetic** patients (fixed random seed, so it's
-reproducible) spanning admissions, prescriptions, lab reports, surgeries, and 45 unstructured documents
-(discharge summaries, scan reports, doctor's notes — also saved as real `.txt` files under `data/documents/`).
+The whole app is a focused **hospital assistant**, not a generic chatbot. `agent/tools/hospital.py`
+auto-creates and seeds `data/hospital.db` on first run with a **synthetic** hospital: 25 patients
+(admissions, prescriptions, lab reports, surgeries, and 45 unstructured documents — discharge summaries,
+scan reports, doctor's notes) and **14 hand-crafted doctors** across 12 specialties, each with a real
+profile (qualifications, origin, experience, languages, weekly availability schedule). All fixed-seed,
+so it's reproducible.
+
+Patients and doctors are properly linked, not just cosmetically similar: every admission, prescription,
+surgery, and lab order references the attending `doctor_id` (matched to a plausible specialty — a
+cardiology diagnosis gets a cardiologist), so "which patients has Dr. X recently seen" is a real SQL
+join over actual encounters, not a separately fabricated list.
 
 📖 **Full architecture, request flow diagrams, and how to extend this with real PDFs:** see
 [HOSPITAL_RAG_ARCHITECTURE.md](HOSPITAL_RAG_ARCHITECTURE.md).
 
 | Tool | Purpose |
 |---|---|
-| `list_patients` | Browse patients when no name/ID is known yet |
-| `search_patient` | Find a patient by name (partial match) or ID |
-| `get_patient_record` | Full combined history for one patient — demographics, admissions, prescriptions, labs, surgeries |
-| `list_patient_documents` | See what documents are on file for a patient |
-| `search_patient_documents` | Keyword-search a patient's documents (discharge summaries, scans, notes) — the RAG layer, no vector DB needed |
+| `list_patients` / `search_patient` | Browse or find a patient by name/ID |
+| `get_patient_record` | Full combined history — demographics, admissions, prescriptions, labs, surgeries |
+| `list_patient_documents` / `search_patient_documents` | Browse or keyword-search a patient's documents (discharge summaries, scans, notes) — the RAG layer, no vector DB needed |
+| `list_doctors` / `search_doctor` | Browse or find a doctor by name/ID, optionally filtered by specialty |
+| `get_doctor_profile` | Full profile — qualifications, weekly availability, recently consulted patients |
 
-Try: *"Search for a patient named Sharma, then summarize their medical history, including any scan findings."* —
-the agent chains `search_patient` → `get_patient_record` → `search_patient_documents` → a natural-language
-summary on its own. Or hit `GET /patients/{id}/summary` for the same summary as a standalone report,
-generated by a fresh, memory-less agent instance.
+Try: *"Search for a patient named Sharma, then summarize their medical history, including any scan findings."*
+— the agent chains `search_patient` → `get_patient_record` → `search_patient_documents` → a natural-language
+summary on its own. Or *"Which cardiologists are available today?"* to see doctor tools + live availability
+in action. The **Patients** and **Doctors** tabs in the sidebar give you the same data instantly with no AI
+call — click any card for the full record and an optional **✨ Generate AI Summary** button (`GET
+/patients/{id}/summary`, `GET /doctors/{id}/summary` — each backed by a fresh, memory-less agent instance).
 
 > [!WARNING]
-> **This is a learning POC — do not put real patient data here.** Tool results are sent to the
-> Gemini API as part of the prompt, this server has **no authentication**, and `hospital.db` is
+> **This is a learning POC — do not put real patient or doctor data here.** Tool results are sent to
+> the Gemini API as part of the prompt, this server has **no authentication**, and `hospital.db` is
 > plain unencrypted SQLite. Real medical records require: a paid/enterprise LLM tier with a data
 > processing agreement, auth + role-based access control on `api/server.py`, encryption at rest,
 > and compliance with applicable law (HIPAA, India's DPDP Act, etc.) — none of which this project
@@ -347,10 +358,13 @@ curl http://localhost:8000/health
 
 ## 📸 Web Interface
 
-This is what you get at `http://localhost:8000` — a dark-themed chat UI with the agent's tools and architecture explorable from the sidebar. While the agent works, a spinner shows its progress ("Thinking… → Using web_search…"), and only the clean final answer lands in the chat:
+This is what you get at `http://localhost:8000` — a light clinical chat UI, with **Patients** and **Doctors**
+directories one click away in the sidebar. While the agent works, a vitals-style pulse shows its progress
+("Thinking… → Using search_doctor…"), and only the clean final answer lands in the chat. Voice input
+(🎤) is built into the input bar:
 
 <p align="center">
-  <img src="docs/web-ui.png" alt="Darshan-AI web interface — chat panel with suggestion chips, tool and architecture panels in the sidebar, and the Gemini model badge" width="720" />
+  <img src="docs/web-ui.png" alt="Darshan-AI hospital assistant web interface — chat panel with hospital-focused suggestion chips, Patients and Doctors tabs in the sidebar, and the Gemini model badge" width="720" />
 </p>
 
 ---

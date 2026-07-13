@@ -13,6 +13,9 @@ Endpoints:
   GET  /patients                  → List/search patients (instant, no LLM call)
   GET  /patients/{id}             → Full structured record (instant, no LLM call)
   GET  /patients/{id}/summary     → AI-generated clinical summary (structured + document data)
+  GET  /doctors                   → List/search doctors, optional specialty filter (instant, no LLM call)
+  GET  /doctors/{id}              → Full profile: qualifications, availability, recent patients
+  GET  /doctors/{id}/summary      → AI-generated doctor bio (profile + recent activity)
 """
 
 import asyncio
@@ -27,7 +30,14 @@ from pydantic import BaseModel
 
 # Import agent (tool registration happens here)
 from agent import Agent
-from agent.tools.hospital import get_patient_full_json, list_patients_json, patient_exists
+from agent.tools.hospital import (
+    doctor_exists,
+    get_doctor_full_json,
+    get_patient_full_json,
+    list_doctors_json,
+    list_patients_json,
+    patient_exists,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -70,6 +80,10 @@ class ChatResponse(BaseModel):
 
 class PatientSummaryResponse(BaseModel):
     patient_id: int
+    summary: str
+
+class DoctorSummaryResponse(BaseModel):
+    doctor_id: int
     summary: str
 
 
@@ -162,6 +176,48 @@ async def patient_summary(patient_id: int):
         detail = error_step["content"] if error_step else "Agent failed to produce a summary."
         raise HTTPException(status_code=502, detail=detail)
     return PatientSummaryResponse(patient_id=patient_id, summary=answer)
+
+
+@app.get("/doctors")
+async def doctors_list(query: str = "", specialty: str = "", limit: int = 50):
+    """List/search doctors, optionally filtered by specialty — direct DB read, no LLM call."""
+    return {"doctors": list_doctors_json(query=query, specialty=specialty, limit=limit)}
+
+
+@app.get("/doctors/{doctor_id}")
+async def doctor_detail(doctor_id: int):
+    """Full doctor profile: qualifications, weekly availability, recent patient encounters."""
+    record = get_doctor_full_json(doctor_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"No doctor found with ID {doctor_id}")
+    return record
+
+
+@app.get("/doctors/{doctor_id}/summary", response_model=DoctorSummaryResponse)
+async def doctor_summary(doctor_id: int):
+    """
+    Generate an AI-written bio for one doctor, combining their profile with
+    recent patient activity. Uses a fresh, stateless Agent per call — same
+    reasoning as /patients/{id}/summary.
+    """
+    if not doctor_exists(doctor_id):
+        raise HTTPException(status_code=404, detail=f"No doctor found with ID {doctor_id}")
+
+    prompt = (
+        f"Look up doctor ID {doctor_id} and write a short professional profile summary: "
+        f"their specialty, qualifications, experience, and weekly availability, plus a "
+        f"one-sentence note on their recent patient activity. Keep it concise and well-organized."
+    )
+
+    def run() -> tuple:
+        return _run_agent(Agent(), prompt)
+
+    answer, steps = await asyncio.to_thread(run)
+    if not answer:
+        error_step = next((s for s in steps if s["type"] == "error"), None)
+        detail = error_step["content"] if error_step else "Agent failed to produce a summary."
+        raise HTTPException(status_code=502, detail=detail)
+    return DoctorSummaryResponse(doctor_id=doctor_id, summary=answer)
 
 
 @app.post("/reset")

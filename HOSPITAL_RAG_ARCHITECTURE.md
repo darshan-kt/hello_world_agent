@@ -10,14 +10,15 @@ For the general agent framework (ReAct loop, tool registry, memory), see [AI_AGE
 
 There is **one agent** (Darshan-AI) with **one brain** (Gemini). Everything it can do — math, weather, web search, remembering facts, and now hospital records — is a **tool**. The agent doesn't have separate "modes" for different domains; it just sees a list of available functions and decides which ones to call based on your question.
 
-The hospital capability adds **two different kinds of memory** to that toolset:
+The hospital capability adds **three different kinds of data** to that toolset:
 
 | Layer | What it stores | How it's queried | Tools |
 |---|---|---|---|
-| **Structured records** (SQL) | Facts with a fixed shape: names, dates, medicine names, lab values | Exact SQL queries — precise, fast, always correct if the data exists | `list_patients`, `search_patient`, `get_patient_record` |
+| **Patient records** (SQL) | Facts with a fixed shape: names, dates, medicine names, lab values | Exact SQL queries — precise, fast, always correct if the data exists | `list_patients`, `search_patient`, `get_patient_record` |
 | **Unstructured documents** (RAG) | Free-text narrative: discharge summaries, scan reports, doctor's notes | Keyword-overlap search — approximate, finds *relevant* text, doesn't guarantee an exact match | `list_patient_documents`, `search_patient_documents` |
+| **Doctor directory** (SQL, relational) | Specialties, qualifications, weekly availability, and *real* encounter history (not fabricated) | Exact SQL queries + a UNION join across every table a doctor is linked to | `list_doctors`, `search_doctor`, `get_doctor_profile` |
 
-Both live in **one SQLite file**, `data/hospital.db`, with the document *text* also duplicated as real `.txt` files under `data/documents/` (a stand-in for how you'd store scanned/uploaded PDFs).
+All three live in **one SQLite file**, `data/hospital.db`, with the document *text* also duplicated as real `.txt` files under `data/documents/` (a stand-in for how you'd store scanned/uploaded PDFs).
 
 > **Not to be confused with:** `data/memory.json` (the file you had open) is a *completely separate* system — the agent's general "remember this fact about the user" long-term memory (`remember_tool.py`), used for things like "remember my favorite color is teal." It has nothing to do with patient records. Three independent stores, one agent:
 > - `data/memory.json` → general assistant facts (key/value)
@@ -41,17 +42,47 @@ graph TD
     REG --> MEM[remember / recall → data/memory.json]
     REG --> HOSP[Hospital tools]
 
-    HOSP --> SQL[(SQL queries:\npatients, admissions,\nprescriptions, lab_reports,\nsurgeries)]
+    HOSP --> SQL[(Patient SQL:\npatients, admissions,\nprescriptions, lab_reports,\nsurgeries)]
     HOSP --> RAG[Document search:\nkeyword-overlap scoring]
+    HOSP --> DOC[(Doctor SQL:\ndoctors, doctor_availability)]
     RAG --> DOCS[(documents table +\ndata/documents/*.txt)]
+    SQL -- "doctor_id FK" --> DOC
     SQL --> DB[(data/hospital.db)]
     RAG --> DB
+    DOC --> DB
 
     classDef store fill:#1f2937,stroke:#3b82f6,stroke-width:2px,color:#fff;
-    class DB,DOCS store;
+    class DB,DOCS,DOC store;
 ```
 
 Nothing here is hardcoded to "know about" hospitals at the framework level — `agent/core.py` has zero hospital-specific code. It just runs the same ReAct loop, and Gemini decides when the hospital tools are relevant based on their `description` text (see `agent/tools/hospital.py`).
+
+---
+
+## 2a. Doctors Are Relationally Linked, Not Decorative
+
+A common shortcut for "dummy doctor data" would be a flat list of names attached to patient records as
+free text. This project does something closer to a real EHR: every clinical row that involves a doctor
+carries a real `doctor_id` foreign key into the `doctors` table —
+
+```mermaid
+graph LR
+    D[(doctors)] -->|attending_doctor_id| A[(admissions)]
+    D -->|doctor_id| P[(prescriptions)]
+    D -->|doctor_id| S[(surgeries)]
+    D -->|ordered_by_doctor_id| L[(lab_reports)]
+```
+
+Two consequences fall out of this for free:
+
+1. **Specialty-matched seeding.** When the seed script generates an admission for "Coronary Artery
+   Disease," it looks up which doctors are Cardiologists (`_DIAGNOSIS_SPECIALTY` → `_pick_doctor()`)
+   and assigns one of them — not a random name. Same for surgeries (`_SURGERY_SPECIALTY`).
+2. **"Recently consulted patients" is a real query, not a fabricated list.** `get_doctor_profile`
+   and `GET /doctors/{id}` both run a `UNION ALL` across admissions, prescriptions, surgeries, and lab
+   orders, filtered to `WHERE ...doctor_id = ?`, ordered by date. If Dr. Krishnan's profile says she
+   recently treated a patient for hypertension, that's because an actual `admissions` row links them —
+   change the underlying data and her profile changes with it automatically.
 
 ---
 
@@ -111,18 +142,22 @@ Key things worth noticing:
 | **Web UI** | `docker compose up -d` → http://localhost:8000, type in the chat box | Real-time streaming via WebSocket, spinner + clean final answer |
 | **REST** | `POST /chat {"message": "..."}` | Returns the full step trace + final answer as JSON — good for debugging or scripting |
 | **CLI** | `python main.py` or `python main.py --message "..."` | Same agent, terminal output, shows every ReAct step by default |
-| **Dedicated report endpoint** | `GET /patients/{id}/summary` | Skips the chat entirely — runs a fixed prompt through a **fresh, memory-less** agent instance and returns just `{patient_id, summary}`. Built for Phase 4 (AI-generated summaries) as a stateless report, not a conversation turn. |
+| **Dedicated report endpoints** | `GET /patients/{id}/summary`, `GET /doctors/{id}/summary` | Skip the chat entirely — run a fixed prompt through a **fresh, memory-less** agent instance and return `{id, summary}`. Stateless reports, not a conversation turn. |
+| **Direct browsing (no LLM)** | Sidebar **Patients** / **Doctors** tabs, or `GET /patients`, `GET /doctors?specialty=...` | Instant DB reads — no Gemini call, no quota cost, used for the card grids and search/filter |
 
 Some example questions and what they trigger:
 
 | You ask | Tools it (likely) calls | Layer |
 |---|---|---|
-| "List the patients" | `list_patients` | SQL |
-| "Find John Smith" | `search_patient` | SQL |
-| "What medications is patient 5 on?" | `get_patient_record` | SQL |
+| "List the patients" | `list_patients` | Patient SQL |
+| "Find John Smith" | `search_patient` | Patient SQL |
+| "What medications is patient 5 on?" | `get_patient_record` | Patient SQL |
 | "Any doctor's notes about fatigue for patient 3?" | `search_patient_documents` | RAG |
-| "What documents exist for patient 12?" | `list_patient_documents` | SQL (metadata about documents) |
+| "What documents exist for patient 12?" | `list_patient_documents` | Patient SQL (metadata) |
 | "Summarize patient 1's full history" | `get_patient_record` **+** `search_patient_documents` | Both, combined by the LLM |
+| "Which cardiologists are available today?" | `list_doctors(specialty="Cardiology")` | Doctor SQL |
+| "Tell me about Dr. Krishnan" | `search_doctor` **+** `get_doctor_profile` | Doctor SQL |
+| "Which patients has Dr. Chen seen recently?" | `get_doctor_profile` (the `recent_patients` join) | Doctor SQL, joined across 4 tables |
 
 ---
 
@@ -210,17 +245,31 @@ scores = cosine_similarity(embedding, doc_embeddings)
 
 A vector DB (ChromaDB is the natural fit — lightweight, embeddable, no separate server process) would replace the manual scoring loop with an indexed similarity search. This is a **localized change** inside `search_patient_documents` — the tool's name, description, and inputs/outputs to the agent stay identical, so nothing else in the system needs to know retrieval got smarter.
 
-### 6d. New structured tables (Doctors, Appointments, Billing)
+### 6d. Doctors are built; Appointments/Billing are the natural next tables
 
-The original design sketch included these as "Future" — they follow the exact same pattern as the five tables already built: add a `CREATE TABLE` block to `_SCHEMA`, a `_seed_*()` function, and one or two `@tool()`-decorated query functions in `hospital.py`. No changes anywhere else — the agent auto-discovers new tools the moment they're registered.
+The `doctors` and `doctor_availability` tables (§2a) shipped following exactly this pattern: a
+`CREATE TABLE` block in `_SCHEMA`, a `_seed_doctors()` function, and a few `@tool()`-decorated query
+functions in `hospital.py`. Nothing in `agent/core.py` or the tool registry needed to change — the
+agent auto-discovers new tools the moment they're registered.
+
+**Appointments** and **Billing** follow the same recipe and are the natural next additions:
+
+- `appointments(appointment_id, patient_id, doctor_id, scheduled_at, status, reason)` — this is what
+  would turn "check availability" (already built) into "book a slot." The `doctor_availability` table
+  already has the weekly schedule; an appointments table would let you check a specific slot isn't
+  already taken and mark it reserved.
+- `billing(bill_id, patient_id, admission_id, item, amount, paid)` — itemized charges per encounter.
+
+Both are query-and-insert tools like the ones already here — no new architecture, just more tables
+following the `doctor_id`/`patient_id` foreign-key pattern already established.
 
 ---
 
 ## 7. Current Limitations (by design, for a POC)
 
 - **All data is synthetic** — fixed random seed, fake names/values, regenerated from scratch each time the DB is deleted.
-- **No authentication** — anyone who can reach the API can query any patient. Real deployment needs auth + role-based access control (this was explicitly scoped out as "Phase 6" and deferred).
+- **No authentication** — anyone who can reach the API can query any patient or doctor record. Real deployment needs auth + role-based access control (this was explicitly scoped out as "Phase 6" and deferred).
 - **No encryption at rest** — `hospital.db` is plain SQLite.
-- **Single shared chat agent** — the `/chat` and `/ws` conversation memory is one process-wide instance; the `/patients/{id}/summary` endpoint deliberately avoids this by spinning up a fresh `Agent()` per call.
+- **Single shared chat agent** — the `/chat` and `/ws` conversation memory is one process-wide instance; the `/patients/{id}/summary` and `/doctors/{id}/summary` endpoints deliberately avoid this by spinning up a fresh `Agent()` per call.
 
-See the README's Hospital Tool section for the same warning in context of the rest of the project.
+See the README's "Hospital Records — Patients & Doctors" section for the same warning in context of the rest of the project.

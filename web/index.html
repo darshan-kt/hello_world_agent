@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Darshan-AI — Hospital Assistant</title>
-  <meta name="description" content="An AI hospital assistant built with the ReAct pattern — patient records, RAG-powered document search, and a live chat interface." />
+  <meta name="description" content="An AI hospital assistant — patient records, a doctor directory with live availability, RAG-powered document search, and voice-enabled chat." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -42,11 +42,8 @@
     <button class="nav-btn" id="btn-patients" onclick="showPanel('patients')">
       <span class="nav-icon">🏥</span> Patients
     </button>
-    <button class="nav-btn" id="btn-tools" onclick="showPanel('tools')">
-      <span class="nav-icon">🔧</span> Tools
-    </button>
-    <button class="nav-btn" id="btn-arch" onclick="showPanel('arch')">
-      <span class="nav-icon">🧠</span> Architecture
+    <button class="nav-btn" id="btn-doctors" onclick="showPanel('doctors')">
+      <span class="nav-icon">🩺</span> Doctors
     </button>
   </nav>
 
@@ -67,8 +64,8 @@
   <!-- Chat Panel -->
   <section class="panel active" id="panel-chat">
     <div class="panel-header">
-      <h1 class="panel-title">Hospital Assistant <span class="version-badge">v2.0</span></h1>
-      <p class="panel-subtitle">ReAct-powered AI Agent · Patient Records · RAG Document Search · Live Tools</p>
+      <h1 class="panel-title">Hospital Assistant <span class="version-badge">v3.0</span></h1>
+      <p class="panel-subtitle">Patient Records · Doctor Directory · RAG Document Search · AI Summaries</p>
     </div>
 
     <div class="chat-container" id="chat-container">
@@ -80,15 +77,15 @@
             <span class="bubble-time" id="welcome-time"></span>
           </div>
           <div class="bubble-content">
-            <p>👋 Hi, I'm <strong>Darshan-AI</strong> — your hospital assistant. I can look up patient records, search clinical documents, and generate AI summaries, on top of general tools like math, weather, and web search.</p>
+            <p>👋 Hi, I'm <strong>Darshan-AI</strong> — your hospital assistant. Ask me about patients, doctors, availability, or clinical records, and I'll look it up and explain it.</p>
             <p>Try asking me:</p>
             <ul class="suggestions">
               <li onclick="sendSuggestion(this)"><span class="sugg-icon">🔍</span> Find a patient named Sharma</li>
               <li onclick="sendSuggestion(this)"><span class="sugg-icon">📋</span> Summarize patient 1's medical history</li>
+              <li onclick="sendSuggestion(this)"><span class="sugg-icon">🩺</span> Which cardiologists are available today?</li>
+              <li onclick="sendSuggestion(this)"><span class="sugg-icon">👨‍⚕️</span> Tell me about Dr. Krishnan's qualifications</li>
               <li onclick="sendSuggestion(this)"><span class="sugg-icon">📄</span> Any doctor's notes about fatigue for patient 3?</li>
-              <li onclick="sendSuggestion(this)"><span class="sugg-icon">🌤️</span> What's the weather in Tokyo?</li>
-              <li onclick="sendSuggestion(this)"><span class="sugg-icon">🔢</span> What is 256 × 17 + 99?</li>
-              <li onclick="sendSuggestion(this)"><span class="sugg-icon">💡</span> What tools do you have?</li>
+              <li onclick="sendSuggestion(this)"><span class="sugg-icon">🗓️</span> When is Dr. Chen available this week?</li>
             </ul>
           </div>
         </div>
@@ -135,113 +132,22 @@
     </div>
   </section>
 
-  <!-- Tools Panel -->
-  <section class="panel" id="panel-tools">
+  <!-- Doctors Panel -->
+  <section class="panel" id="panel-doctors">
     <div class="panel-header">
-      <h1 class="panel-title">Available Tools</h1>
-      <p class="panel-subtitle">Functions the agent can call to get accurate information</p>
+      <h1 class="panel-title">Doctors <span class="version-badge">🩺 14 on staff</span></h1>
+      <p class="panel-subtitle">Browse instantly (no AI call) · Click a doctor for qualifications, availability + AI bio</p>
     </div>
-    <div class="tools-grid" id="tools-grid">
-      <div class="loading-tools">Loading tools…</div>
+    <div class="patients-toolbar">
+      <div class="patients-search">
+        <span class="patients-search-icon">🔍</span>
+        <input type="text" id="doctors-search-input" placeholder="Search by name or doctor ID…" oninput="searchDoctors(this.value)" />
+      </div>
+      <div class="specialty-chips" id="specialty-chips"></div>
+      <div class="patients-count" id="doctors-count"></div>
     </div>
-  </section>
-
-  <!-- Architecture Panel -->
-  <section class="panel" id="panel-arch">
-    <div class="panel-header">
-      <h1 class="panel-title">How It Works</h1>
-      <p class="panel-subtitle">The ReAct pattern — foundation of every production AI agent</p>
-    </div>
-
-    <div class="arch-content">
-      <div class="react-diagram">
-        <div class="react-step" id="step-think">
-          <div class="step-icon">💭</div>
-          <div class="step-label">THINK</div>
-          <div class="step-desc">LLM reasons about what the user needs and which tool (if any) to use</div>
-        </div>
-        <div class="react-arrow">→</div>
-        <div class="react-step" id="step-act">
-          <div class="step-icon">⚡</div>
-          <div class="step-label">ACT</div>
-          <div class="step-desc">Agent calls a tool with parameters, or produces a final answer</div>
-        </div>
-        <div class="react-arrow">→</div>
-        <div class="react-step" id="step-observe">
-          <div class="step-icon">👁️</div>
-          <div class="step-label">OBSERVE</div>
-          <div class="step-desc">Tool result is fed back to the LLM as new context</div>
-        </div>
-        <div class="react-arrow loop-arrow">↩ loop</div>
-      </div>
-
-      <div class="arch-cards">
-        <div class="arch-card">
-          <div class="arch-card-icon">🧠</div>
-          <h3>LLM Core</h3>
-          <p>Google Gemini 2.0 Flash — fast, capable, free tier. The "brain" that reasons and plans.</p>
-          <code>agent/core.py</code>
-        </div>
-        <div class="arch-card">
-          <div class="arch-card-icon">🔧</div>
-          <h3>Tool Registry</h3>
-          <p>Add any Python function as a tool with a single <code>@tool()</code> decorator.</p>
-          <code>agent/tools/registry.py</code>
-        </div>
-        <div class="arch-card">
-          <div class="arch-card-icon">💾</div>
-          <h3>Memory</h3>
-          <p>Short-term (sliding window) + long-term (JSON on disk) memory systems.</p>
-          <code>agent/memory.py</code>
-        </div>
-        <div class="arch-card">
-          <div class="arch-card-icon">⚡</div>
-          <h3>FastAPI Server</h3>
-          <p>REST + WebSocket API with real-time step streaming to the UI.</p>
-          <code>api/server.py</code>
-        </div>
-      </div>
-
-      <div class="code-flow">
-        <h3 class="code-flow-title">The ReAct Loop in Code</h3>
-        <pre class="code-block"><span class="kw">for</span> iteration <span class="kw">in</span> range(MAX_ITERATIONS):
-    <span class="cm"># 1. THINK — ask the LLM</span>
-    response = llm.generate(prompt + memory + tools)
-    parsed   = parse(response)  <span class="cm"># extract thought/action/answer</span>
-
-    <span class="cm"># 2. ANSWER — if LLM has what it needs</span>
-    <span class="kw">if</span> parsed.final_answer:
-        <span class="kw">yield</span> AgentStep(<span class="str">"answer"</span>, parsed.final_answer)
-        <span class="kw">return</span>
-
-    <span class="cm"># 3. ACT — call the tool</span>
-    observation = run_tool(parsed.action, parsed.action_input)
-
-    <span class="cm"># 4. OBSERVE — add result to memory and loop again</span>
-    memory.add(<span class="str">"tool"</span>, observation)
-    <span class="kw">continue</span>  <span class="cm"># ← back to top, now LLM has more context</span></pre>
-      </div>
-
-      <div class="file-tree">
-        <h3>Project Structure</h3>
-        <pre class="tree-block">hello_agent/
-├── <span class="f-dir">agent/</span>
-│   ├── <span class="f-key">core.py</span>          <span class="f-cm">← ReAct loop (START HERE)</span>
-│   ├── <span class="f-key">memory.py</span>        <span class="f-cm">← Conversation history</span>
-│   └── <span class="f-dir">tools/</span>
-│       ├── <span class="f-key">registry.py</span>  <span class="f-cm">← @tool() decorator</span>
-│       ├── calculator.py    <span class="f-cm">← Math tool</span>
-│       ├── weather.py       <span class="f-cm">← Weather tool</span>
-│       ├── web_search.py    <span class="f-cm">← Search tool</span>
-│       ├── memory_tool.py   <span class="f-cm">← Remember/recall</span>
-│       └── hospital.py      <span class="f-cm">← Patient records + RAG</span>
-├── <span class="f-dir">api/</span>
-│   └── <span class="f-key">server.py</span>        <span class="f-cm">← FastAPI backend</span>
-├── <span class="f-dir">web/</span>             <span class="f-cm">← This UI</span>
-├── <span class="f-key">config.py</span>            <span class="f-cm">← All settings</span>
-├── <span class="f-key">main.py</span>              <span class="f-cm">← CLI interface</span>
-└── README.md</pre>
-      </div>
+    <div class="patients-grid" id="doctors-grid">
+      <div class="patients-loading">Loading doctors…</div>
     </div>
   </section>
 
@@ -261,6 +167,24 @@
     <button class="drawer-close" onclick="closeDrawer()">✕</button>
   </div>
   <div class="drawer-body" id="drawer-body">
+    <!-- populated by app.js -->
+  </div>
+</aside>
+
+<!-- Doctor Detail Drawer -->
+<div class="drawer-backdrop" id="doctor-drawer-backdrop" onclick="closeDoctorDrawer()"></div>
+<aside class="patient-drawer" id="doctor-drawer">
+  <div class="drawer-header">
+    <div class="drawer-title">
+      <div class="patient-avatar" id="doctor-drawer-avatar">?</div>
+      <div>
+        <div class="drawer-name" id="doctor-drawer-name">—</div>
+        <div class="drawer-sub" id="doctor-drawer-sub">—</div>
+      </div>
+    </div>
+    <button class="drawer-close" onclick="closeDoctorDrawer()">✕</button>
+  </div>
+  <div class="drawer-body" id="doctor-drawer-body">
     <!-- populated by app.js -->
   </div>
 </aside>

@@ -670,177 +670,6 @@ body { display: flex; }
   font-size: 10px;
 }
 
-/* ── Tools Panel ────────────────────────────────────── */
-.tools-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 20px;
-  padding: 28px 36px;
-  overflow-y: auto;
-}
-
-.tool-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 20px;
-  box-shadow: var(--shadow-sm);
-  transition: all var(--transition);
-  animation: fadeUp 0.3s ease forwards;
-}
-.tool-card:hover {
-  border-color: var(--border-accent);
-  box-shadow: var(--shadow-glow);
-  transform: translateY(-2px);
-}
-
-.tool-card-header {
-  display: flex; align-items: center; gap: 12px;
-  margin-bottom: 12px;
-}
-.tool-icon {
-  width: 40px; height: 40px;
-  border-radius: var(--radius-md);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 20px;
-  flex-shrink: 0;
-}
-.tool-icon.calc     { background: rgba(104,81,224,0.14); }
-.tool-icon.weather  { background: rgba(2,132,199,0.14); }
-.tool-icon.search   { background: rgba(217,119,6,0.14); }
-.tool-icon.memory   { background: rgba(22,163,74,0.14); }
-.tool-icon.hospital { background: rgba(13,184,166,0.16); }
-.tool-icon.default  { background: rgba(15,23,42,0.06); }
-
-.tool-name {
-  font-size: 15px; font-weight: 600;
-  font-family: var(--font-mono);
-}
-.tool-desc {
-  font-size: 13px; color: var(--text-secondary);
-  line-height: 1.5;
-  margin-bottom: 12px;
-}
-.tool-params {
-  font-size: 11px; font-family: var(--font-mono);
-  color: var(--accent-green);
-  background: rgba(22,163,74,0.06);
-  border: 1px solid rgba(22,163,74,0.18);
-  border-radius: var(--radius-sm);
-  padding: 8px 10px;
-}
-.loading-tools {
-  grid-column: 1/-1;
-  text-align: center;
-  color: var(--text-muted);
-  padding: 60px;
-}
-
-/* ── Architecture Panel ─────────────────────────────── */
-.arch-content {
-  overflow-y: auto;
-  padding: 28px 36px;
-  display: flex; flex-direction: column; gap: 32px;
-}
-
-/* ReAct Diagram */
-.react-diagram {
-  display: flex; align-items: center; gap: 16px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 28px;
-  box-shadow: var(--shadow-sm);
-  flex-wrap: wrap;
-}
-
-.react-step {
-  flex: 1; min-width: 160px;
-  text-align: center;
-  padding: 20px 16px;
-  background: var(--bg-hover);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-  transition: all var(--transition);
-}
-.react-step:hover {
-  border-color: var(--border-accent);
-  box-shadow: var(--shadow-glow);
-}
-
-.step-icon { font-size: 32px; margin-bottom: 8px; }
-.step-label {
-  font-size: 11px; font-weight: 800; letter-spacing: 2px;
-  color: var(--accent-primary); margin-bottom: 8px;
-}
-.step-desc { font-size: 12px; color: var(--text-secondary); }
-
-.react-arrow {
-  font-size: 24px; color: var(--accent-primary);
-  opacity: 0.6; flex-shrink: 0;
-}
-.loop-arrow {
-  font-size: 14px; color: var(--accent-green);
-  font-family: var(--font-mono);
-}
-
-/* Arch cards */
-.arch-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 16px;
-}
-
-.arch-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 20px;
-  box-shadow: var(--shadow-sm);
-  transition: all var(--transition);
-}
-.arch-card:hover {
-  border-color: var(--border-accent);
-  transform: translateY(-2px);
-}
-.arch-card-icon { font-size: 28px; margin-bottom: 10px; }
-.arch-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
-.arch-card p { font-size: 12px; color: var(--text-secondary); margin-bottom: 10px; }
-.arch-card code {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--accent-primary);
-  background: rgba(104,81,224,0.1);
-  padding: 3px 7px;
-  border-radius: 4px;
-}
-
-/* Code block */
-.code-flow-title {
-  font-size: 16px; font-weight: 600;
-  margin-bottom: 12px;
-}
-
-.code-block, .tree-block {
-  background: #f6f8fa;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 20px;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.8;
-  overflow-x: auto;
-  color: var(--text-primary);
-}
-.code-block .kw  { color: #a626a4; }
-.code-block .cm  { color: #6b7280; font-style: italic; }
-.code-block .str { color: #16a34a; }
-
-.tree-block { font-size: 12px; }
-.f-dir  { color: var(--accent-blue); font-weight: 600; }
-.f-key  { color: var(--accent-primary); }
-.f-cm   { color: #6b7280; font-style: italic; }
-
 /* ── Patients Panel ─────────────────────────────────── */
 .patients-toolbar {
   padding: 0 36px 20px;
@@ -939,6 +768,83 @@ body { display: flex; }
   text-align: center;
   color: var(--text-muted);
   padding: 60px 20px;
+}
+
+/* ── Doctors Panel additions ─────────────────────────── */
+.specialty-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+.specialty-chip {
+  padding: 5px 12px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.specialty-chip:hover {
+  border-color: var(--accent-teal);
+  color: var(--accent-teal);
+}
+.specialty-chip.active {
+  background: linear-gradient(135deg, var(--accent-teal), var(--accent-primary));
+  border-color: transparent;
+  color: white;
+}
+
+.doctor-card-specialty {
+  font-size: 11px;
+  color: var(--accent-teal);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-top: 2px;
+}
+
+.availability-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 9px 2px 7px;
+  border-radius: 99px;
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.4px;
+  margin-top: 6px;
+}
+.availability-badge.available {
+  background: rgba(22,163,74,0.12);
+  color: var(--accent-green);
+}
+.availability-badge.available::before {
+  content: '';
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent-green);
+  box-shadow: 0 0 6px var(--accent-green);
+  animation: blink 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+.availability-badge.unavailable {
+  background: rgba(100,116,139,0.1);
+  color: var(--text-muted);
+}
+.availability-badge.unavailable::before {
+  content: '';
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.doctor-bio {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+  padding: 12px 14px;
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
 }
 
 /* ── Patient Detail Drawer ──────────────────────────── */
