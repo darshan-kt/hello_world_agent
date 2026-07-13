@@ -30,7 +30,12 @@ And this is exactly what this project does — the weather answer comes from a *
 Every effective AI agent requires three main components. Think of it like building a digital employee.
 
 ### 🧠 1. The Brain (The LLM)
-The agent needs a Large Language Model to process language, understand the user's intent, and make logical decisions. This project uses **Google Gemini 2.5 Flash** (free tier) — but the architecture works with any LLM.
+The agent needs a Large Language Model to process language, understand the user's intent, and make logical decisions. This project actually ships **two** working brains, switched with one line in `.env` (`LLM_PROVIDER=gemini` or `LLM_PROVIDER=groq`):
+
+- **Google Gemini 2.5 Flash** (default, free tier)
+- **Groq** running `openai/gpt-oss-120b` (free tier, useful when Gemini's daily quota runs out during active testing)
+
+Both talk to the agent through the same native function-calling interface (see §3) — `agent/core.py` just has a small provider-specific adapter for each (`_run_gemini()` / `_run_groq()`), so every tool works identically regardless of which one is active. This is also proof of the "works with any LLM" claim below — it isn't hypothetical here, it's implemented.
 
 ### 🧰 2. The Hands (Tools)
 Tools are how the agent interacts with the real world. `hello_agent` is a **hospital assistant**, so most
@@ -90,7 +95,7 @@ Now that you understand the concepts, let's look at how the code actually works.
 
 | Concept | File in Project | What it does |
 | :--- | :--- | :--- |
-| **The Loop** | `agent/core.py` | This is the engine room. It contains the exact code that forces the AI to output "Thought:", "Action:", and "Final Answer:". |
+| **The Loop** | `agent/core.py` | This is the engine room. It drives the Thought → Action → Observation cycle using each provider's **native function-calling API** — the model returns structured, pre-parsed tool calls (not text like `"Action: search_patient"` that has to be regex-parsed), which is far more reliable. `_run_gemini()` and `_run_groq()` are the two provider-specific versions of this loop. |
 | **Memory** | `agent/memory.py` | This keeps track of the chat history so the AI doesn't get amnesia after every message. |
 | **The Tools** | `agent/tools/` | This folder holds the agent's capabilities. Want the agent to send emails? You would create `agent/tools/email.py` and register it with one `@tool()` decorator! |
 | **The Body** | `api/server.py` & `web/` | This provides the user interface (browser chat with live streaming) so humans can interact with the agent easily. |
@@ -100,7 +105,7 @@ Now that you understand the concepts, let's look at how the code actually works.
 
 ## 5. Try It Yourself
 
-The whole system runs with one command (you just need Docker and a free Gemini API key in `.env`):
+The whole system runs with one command (you just need Docker and a free API key — Gemini or Groq — in `.env`):
 
 ```bash
 docker compose up -d        # → open http://localhost:8000
@@ -117,9 +122,14 @@ Or skip the chat entirely — click **Patients** or **Doctors** in the sidebar t
 hospital records directly (instant, no AI call), then click any card for a full chart/profile and an
 optional **✨ Generate AI Summary** button.
 
+Changed your mind mid-question? The send button turns into a stop (■) button while the agent is
+working — click it to cancel. Under the hood this sets a flag the ReAct loop checks between steps
+(see `agent/core.py`), so it stops at the next Thought/Action/Observation checkpoint rather than
+instantly — usually within a couple of seconds.
+
 > [!TIP]
 > **Career Advice for AI Builders:**
-> You don't need to invent new AI models to be valuable in the AI industry. The future belongs to people who know how to take existing models (like Gemini) and wire them up with tools, memory, and ReAct loops to solve real-world business problems.
+> You don't need to invent new AI models to be valuable in the AI industry. The future belongs to people who know how to take existing models (like Gemini or Groq) and wire them up with tools, memory, and ReAct loops to solve real-world business problems.
 
 ---
 

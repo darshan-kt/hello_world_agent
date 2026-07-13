@@ -21,6 +21,7 @@ Endpoints:
 import asyncio
 import json
 import logging
+import threading
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -234,8 +235,19 @@ async def websocket_endpoint(websocket: WebSocket):
 
     Protocol:
       Client sends: {"message": "What is 2+2?"}
-      Server sends: multiple {"type": "thought"|"action"|"observation"|"answer", "content": "..."}
+      Client sends: {"action": "cancel"}   → abort the request currently in flight
+      Client sends: {"action": "reset"}    → clear conversation memory
+      Server sends: multiple {"type": "thought"|"action"|"observation"|"answer"|"error"|"cancelled", "content": "..."}
       Server sends: {"type": "done"} when complete
+
+    Cancellation is cooperative, not instant: the agent loop (agent/core.py)
+    only checks for it between LLM round-trips and tool calls, since neither
+    provider SDK is called in a way that supports aborting a request already
+    in flight. To keep the UI responsive anyway, this handler sends the
+    "cancelled" step to the client as soon as the cancel message arrives,
+    without waiting for the agent's own generator to unwind — that generator
+    keeps running in its worker thread until its current checkpoint, but its
+    (now unused) result is simply dropped.
     """
     await websocket.accept()
     logger.info("WebSocket client connected")
@@ -251,20 +263,81 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_text(json.dumps({"type": "reset", "content": "Memory cleared."}))
                 continue
 
+            if payload.get("action") == "cancel":
+                continue  # nothing in flight at the top of the loop
+
             user_message = payload.get("message", "").strip()
             if not user_message:
                 continue
 
-            # Stream each ReAct step to the client.
-            # The agent generator makes blocking LLM calls, so pull each
-            # step in a worker thread to keep the event loop responsive.
-            step_gen = _agent.run(user_message)
-            done = object()
-            while True:
-                step = await asyncio.to_thread(next, step_gen, done)
-                if step is done:
-                    break
-                await websocket.send_text(json.dumps(step.to_dict()))
+            # Captured so a cancelled turn's user message (and any tool
+            # observations already recorded before cancel took effect) can be
+            # rolled back — otherwise it lingers as an "unanswered" turn and
+            # the next message's LLM call tries to address it too.
+            mark = len(_agent.memory)
+            cancel_event = threading.Event()
+            step_gen = _agent.run(user_message, cancel_event=cancel_event)
+            done_sentinel = object()
+            last_step_type = None
+
+            async def drain_steps():
+                nonlocal last_step_type
+                # The agent generator makes blocking LLM calls, so pull each
+                # step in a worker thread to keep the event loop responsive.
+                while True:
+                    step = await asyncio.to_thread(next, step_gen, done_sentinel)
+                    if step is done_sentinel:
+                        return
+                    last_step_type = step.type
+                    await websocket.send_text(json.dumps(step.to_dict()))
+                    if step.type in ("answer", "error", "cancelled"):
+                        return
+
+            async def listen_for_cancel():
+                # Runs concurrently with drain_steps() on the same socket,
+                # watching for an out-of-band cancel message.
+                while True:
+                    msg = await websocket.receive_text()
+                    try:
+                        p = json.loads(msg)
+                    except json.JSONDecodeError:
+                        continue
+                    if p.get("action") == "cancel":
+                        cancel_event.set()
+                        return
+
+            drain_task = asyncio.create_task(drain_steps())
+            listen_task = asyncio.create_task(listen_for_cancel())
+            done, _pending = await asyncio.wait(
+                {drain_task, listen_task}, return_when=asyncio.FIRST_COMPLETED
+            )
+
+            cancelled = False
+            if listen_task in done:
+                exc = listen_task.exception()
+                drain_task.cancel()
+                try:
+                    await drain_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+                if exc is not None:
+                    raise exc  # e.g. client disconnected — let the outer handler deal with it
+                await websocket.send_text(json.dumps({"type": "cancelled", "content": "Request cancelled.", "tool_name": ""}))
+                cancelled = True
+            else:
+                listen_task.cancel()
+                try:
+                    await listen_task
+                except asyncio.CancelledError:
+                    pass
+                drain_task.result()  # re-raise any exception from drain_steps()
+                cancelled = last_step_type == "cancelled"
+
+            if cancelled:
+                # Safe because turns are processed strictly one at a time on
+                # this connection: nothing else can have appended to memory
+                # between `mark` being captured and now.
+                _agent.memory.truncate_to(mark)
 
             # Signal completion
             await websocket.send_text(json.dumps({"type": "done"}))

@@ -1,5 +1,6 @@
 # ── Core LLM ──────────────────────────────────
 google-genai>=1.0.0
+groq>=1.0.0           # Alternative provider (LLM_PROVIDER=groq) — generous free tier
 
 # ── Web API ───────────────────────────────────
 fastapi>=0.115.0

@@ -19,6 +19,7 @@ let doctorSearchDebounce = null;
 let currentDrawerDoctorId = null;
 let allDoctors = [];
 let activeSpecialtyFilter = '';
+let restAbortController = null; // cancels the client-side wait on the /chat REST fallback
 
 // Small emoji prefix shown next to "Using <tool>…" in the thinking indicator.
 const TOOL_ICONS = {
@@ -41,9 +42,15 @@ const TOOL_ICONS = {
 // ──────────────────────────────────────────────
 // Init
 // ──────────────────────────────────────────────
+const SESSION_KEY = 'darshan_session';
+
 document.addEventListener('DOMContentLoaded', () => {
   // Set welcome time
   document.getElementById('welcome-time').textContent = formatTime(new Date());
+
+  // Demo sign-in badge (see web/login.js — index.html's auth guard already
+  // redirected to /login if there's no session, so this should always exist)
+  initUserBadge();
 
   // Connect WebSocket
   connectWebSocket();
@@ -124,6 +131,13 @@ function handleAgentStep(step) {
       removeTypingIndicator();
       ensureAgentBubble();
       appendStep('error', '❌ Error', step.content);
+      finishThinking();
+      break;
+
+    case 'cancelled':
+      removeTypingIndicator();
+      ensureAgentBubble();
+      appendStep('cancelled', '⏹ Cancelled', step.content || 'Request cancelled.');
       finishThinking();
       break;
 
@@ -228,6 +242,25 @@ function removeTypingIndicator() {
 // ──────────────────────────────────────────────
 // Sending Messages
 // ──────────────────────────────────────────────
+function handleSendClick() {
+  if (isThinking) {
+    cancelRequest();
+  } else {
+    sendMessage();
+  }
+}
+
+function cancelRequest() {
+  if (!isThinking) return;
+
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ action: 'cancel' }));
+  } else if (restAbortController) {
+    restAbortController.abort();
+  }
+  updateTypingLabel('Cancelling…');
+}
+
 function sendMessage() {
   const input = document.getElementById('user-input');
   const message = input.value.trim();
@@ -260,11 +293,13 @@ function sendMessage() {
 }
 
 async function fetchChat(message) {
+  restAbortController = new AbortController();
   try {
     const resp = await fetch('/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message }),
+      signal: restAbortController.signal,
     });
     const data = await resp.json();
     removeTypingIndicator();
@@ -275,10 +310,22 @@ async function fetchChat(message) {
       await sleep(80);
     }
   } catch (e) {
+    if (e.name === 'AbortError') {
+      // Cancelled client-side — the request already left the browser, so the
+      // server keeps processing it to completion in the background (there's
+      // no cancellation channel over plain HTTP), but we stop waiting on it.
+      removeTypingIndicator();
+      ensureAgentBubble();
+      appendStep('cancelled', '⏹ Cancelled', 'Request cancelled.');
+      finishThinking();
+      return;
+    }
     removeTypingIndicator();
     ensureAgentBubble();
     appendStep('error', '❌ Error', `Failed to connect: ${e.message}`);
     finishThinking();
+  } finally {
+    restAbortController = null;
   }
 }
 
@@ -387,14 +434,39 @@ function stopListening() {
 
 function startThinking() {
   isThinking = true;
-  document.getElementById('send-btn').disabled = true;
+  const sendBtn = document.getElementById('send-btn');
+  sendBtn.classList.add('stop-mode');
+  sendBtn.title = 'Stop generating';
+  sendBtn.querySelector('.send-icon').textContent = '■';
   document.getElementById('agent-avatar').style.boxShadow = '0 0 30px rgba(20,184,166,0.8)';
 }
 
 function finishThinking() {
   isThinking = false;
-  document.getElementById('send-btn').disabled = false;
+  const sendBtn = document.getElementById('send-btn');
+  sendBtn.classList.remove('stop-mode');
+  sendBtn.title = 'Send';
+  sendBtn.querySelector('.send-icon').textContent = '➤';
   document.getElementById('agent-avatar').style.boxShadow = '';
+}
+
+// ──────────────────────────────────────────────
+// Demo Sign-In Badge
+// ──────────────────────────────────────────────
+function initUserBadge() {
+  let username = 'Guest';
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (raw) username = JSON.parse(raw).username || username;
+  } catch (e) { /* corrupt/missing session — fall back to Guest */ }
+
+  document.getElementById('user-badge-name').textContent = username;
+  document.getElementById('user-badge-avatar').textContent = initials(username) || '?';
+}
+
+function logout() {
+  try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* ignore */ }
+  window.location.href = '/login';
 }
 
 // ──────────────────────────────────────────────

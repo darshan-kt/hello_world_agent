@@ -15,8 +15,25 @@ load_dotenv(Path(__file__).parent / ".env")
 # ──────────────────────────────────────────────
 # LLM Settings
 # ──────────────────────────────────────────────
+# LLM_PROVIDER selects which brain the agent uses: "gemini" (default) or "groq".
+# Groq's free tier has a far more generous daily request limit than Gemini's
+# free tier commonly does — useful if you're hitting 429s during active testing.
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").strip().lower()
+
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 LLM_MODEL      = os.getenv("LLM_MODEL", "gemini-2.5-flash")   # fast & free
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+# openai/gpt-oss-120b chosen after live-testing several Groq models against this
+# project's tool set: llama-3.3-70b-versatile and llama-4-scout both produced
+# malformed/mistyped tool calls (400 tool_use_failed) on multi-step chains here;
+# gpt-oss-120b chained search_patient -> get_patient_record correctly every time.
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+# Higher-throughput alternative if you need more than Groq's standard free-tier
+# daily cap: GROQ_MODEL=llama-3.1-8b-instant (~14,400 req/day free tier, smaller
+# model — verified reliable on simple single-tool calls, not re-verified on
+# multi-step chains, so test it against your own prompts before relying on it)
+
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.2"))  # lower = more deterministic
 MAX_TOKENS      = int(os.getenv("MAX_TOKENS", "2048"))
 

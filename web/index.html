@@ -9,6 +9,16 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/style.css" />
+  <script>
+    // Auth guard — runs before paint so an unauthenticated visitor never sees
+    // a flash of the chat UI. Demo-only gate: see web/login.js for what
+    // "authenticated" means here (any non-empty username/password).
+    (function () {
+      try {
+        if (!localStorage.getItem('darshan_session')) window.location.replace('/login');
+      } catch (e) { /* localStorage unavailable — let the app load rather than dead-end the user */ }
+    })();
+  </script>
 </head>
 <body>
 
@@ -48,6 +58,11 @@
   </nav>
 
   <div class="sidebar-footer">
+    <div class="user-badge">
+      <span class="user-badge-avatar" id="user-badge-avatar">?</span>
+      <span class="user-badge-name" id="user-badge-name">—</span>
+      <button class="logout-link-btn" onclick="logout()" title="Sign out">Logout</button>
+    </div>
     <button class="reset-btn" id="btn-reset" onclick="resetConversation()">
       🗑️ Clear Chat
     </button>
@@ -106,11 +121,11 @@
           <span class="mic-icon">🎤</span>
           <span class="mic-wave" aria-hidden="true"><span></span><span></span><span></span></span>
         </button>
-        <button class="send-btn" id="send-btn" onclick="sendMessage()">
+        <button class="send-btn" id="send-btn" onclick="handleSendClick()" title="Send">
           <span class="send-icon">➤</span>
         </button>
       </div>
-      <div class="input-hint">Press <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for new line · <kbd>🎤</kbd> to speak</div>
+      <div class="input-hint" id="input-hint">Press <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for new line · <kbd>🎤</kbd> to speak</div>
     </div>
   </section>
 

@@ -37,7 +37,7 @@ This project implements the **ReAct pattern** (Reasoning + Acting), which is the
 | Feature | Details |
 |---|---|
 | 🔄 **ReAct Loop** | Full think → act → observe → repeat cycle, with multi-tool chaining |
-| 🧠 **Real LLM** | Google Gemini 2.5 Flash (free tier) |
+| 🧠 **Real LLM** | Google Gemini 2.5 Flash **or** Groq (`openai/gpt-oss-120b`) — swap providers with one `.env` line |
 | 🔍 **Live Web Search** | Real DuckDuckGo search — no API key needed |
 | 🌤️ **Live Weather** | Real Open-Meteo data for any city — no API key needed |
 | 🏥 **Patient Records (POC)** | SQLite-backed records + RAG document search — synthetic data only, see note below |
@@ -46,6 +46,7 @@ This project implements the **ReAct pattern** (Reasoning + Acting), which is the
 | 💾 **Memory** | Short-term (conversation) + long-term (JSON, survives restarts) |
 | 🌐 **Web UI** | Light clinical chat interface — spinner while thinking, clean final answers |
 | 🎤 **Voice Input** | Speak instead of typing — browser-native speech-to-text, no server round trip |
+| ⏹️ **Cancel Requests** | Send button becomes a stop button while the agent is working — cancel a request mid-flight |
 | 🖥️ **CLI** | Rich terminal interface for testing |
 | ⚡ **WebSocket** | Real-time streaming from agent to browser |
 | 🐳 **Docker Compose** | Entire stack with one command: `docker compose up -d` |
@@ -261,11 +262,24 @@ Unlike most tutorial projects, the tools here hit **real APIs out of the box** �
 |---|---|---|
 | `web_search` | DuckDuckGo via [`ddgs`](https://pypi.org/project/ddgs/) | Swap in [Tavily](https://tavily.com) for higher-quality results (free tier, needs key) |
 | `get_weather` | [Open-Meteo](https://open-meteo.com) geocoding + forecast | Already real — any city worldwide |
-| LLM | Gemini 2.5 Flash (free tier) | `LLM_MODEL=gemini-2.5-pro` in `.env` for a more powerful model |
+| LLM | Gemini 2.5 Flash (free tier) **or** Groq (free tier) — see below | `LLM_MODEL=gemini-2.5-pro` in `.env` for a more powerful Gemini model |
 
-**Note on demo mode:** if `GEMINI_API_KEY` is missing or invalid, the agent falls back to a keyword-based mock "brain" so the ReAct loop is still demonstrable — but answers will be canned. With a valid key, everything is real.
+**Note on demo mode:** if the active provider's API key is missing or invalid, the agent falls back to a keyword-based mock "brain" so the ReAct loop is still demonstrable — but answers will be canned. With a valid key, everything is real.
 
-**Note on free-tier quota:** Gemini's free tier caps `gemini-2.5-flash` at a small number of requests **per day**, not just per minute (Google returns `429 RESOURCE_EXHAUSTED` with `GenerateRequestsPerDayPerProjectPerModel-FreeTier` once hit). Each agent turn can use several requests when it chains tool calls, so this is easy to hit during active testing. It resets on Google's daily cycle — no code fix for it, only a higher billing tier removes the cap.
+### Two LLM providers — switch with one line in `.env`
+
+Gemini's free tier caps `gemini-2.5-flash` at a small number of requests **per day**, not just per minute (Google returns `429 RESOURCE_EXHAUSTED` with `GenerateRequestsPerDayPerProjectPerModel-FreeTier` once hit). Each agent turn can use several requests when it chains tool calls, so this is easy to hit during active testing.
+
+[Groq](https://console.groq.com/keys) offers a free tier with a substantially higher daily request cap, an OpenAI-compatible tools API, and fast inference. Both providers use real structured function calling (`agent/core.py` has a `_run_gemini` and `_run_groq` generator, dispatched by `LLM_PROVIDER`) — same tools, same ReAct loop, same UI.
+
+```bash
+# In .env
+LLM_PROVIDER=groq
+GROQ_API_KEY=gsk_...          # https://console.groq.com/keys (free)
+GROQ_MODEL=openai/gpt-oss-120b
+```
+
+**On model choice:** not every Groq-hosted model handles multi-step tool calling reliably against this project's schema — `llama-3.3-70b-versatile` and the Llama-4 Scout model both produced malformed or mistyped tool calls (`400 tool_use_failed`, or a string instead of an integer for `patient_id`) in live testing here. `openai/gpt-oss-120b` chained `search_patient` → `get_patient_record` and 3-tool doctor lookups correctly every time — that's why it's the default. If you change `GROQ_MODEL`, re-test a multi-tool question (e.g. *"Search for a patient named Sharma, then summarize their medical history"*) before trusting it.
 
 ---
 
@@ -361,7 +375,8 @@ curl http://localhost:8000/health
 This is what you get at `http://localhost:8000` — a light clinical chat UI, with **Patients** and **Doctors**
 directories one click away in the sidebar. While the agent works, a vitals-style pulse shows its progress
 ("Thinking… → Using search_doctor…"), and only the clean final answer lands in the chat. Voice input
-(🎤) is built into the input bar:
+(🎤) is built into the input bar, and the send button doubles as a stop (■) button — click it any time
+to cancel a request that's still running:
 
 <p align="center">
   <img src="docs/web-ui.png" alt="Darshan-AI hospital assistant web interface — chat panel with hospital-focused suggestion chips, Patients and Doctors tabs in the sidebar, and the Gemini model badge" width="720" />

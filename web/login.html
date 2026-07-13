@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign In — Darshan-AI Hospital Assistant</title>
+  <meta name="description" content="Staff sign-in for the Darshan-AI hospital assistant." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+  <script>
+    // If already signed in, skip straight to the app — runs before paint to avoid a flash of the form.
+    (function () {
+      try {
+        if (localStorage.getItem('darshan_session')) window.location.replace('/');
+      } catch (e) { /* localStorage unavailable — fall through to the form */ }
+    })();
+  </script>
+</head>
+<body class="login-body">
+
+<div class="login-screen">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="agent-avatar login-avatar">
+        <div class="avatar-pulse"></div>
+        <span class="avatar-icon">🩺</span>
+      </div>
+      <h1 class="login-title">Darshan-AI</h1>
+      <p class="login-subtitle">Hospital Assistant — Staff Portal</p>
+    </div>
+
+    <form id="login-form" class="login-form" novalidate>
+      <div class="login-field">
+        <label for="login-username">Username or Email</label>
+        <div class="login-input-wrap">
+          <span class="login-input-icon">👤</span>
+          <input type="text" id="login-username" autocomplete="username" placeholder="e.g. dr.mehta" autofocus />
+        </div>
+      </div>
+
+      <div class="login-field">
+        <label for="login-password">Password</label>
+        <div class="login-input-wrap">
+          <span class="login-input-icon">🔒</span>
+          <input type="password" id="login-password" autocomplete="current-password" placeholder="••••••••" />
+          <button type="button" class="login-eye-btn" id="login-eye-btn" title="Show password" tabindex="-1">👁️</button>
+        </div>
+      </div>
+
+      <div class="login-error" id="login-error" hidden></div>
+
+      <button type="submit" class="login-submit-btn" id="login-submit-btn">Sign In</button>
+    </form>
+
+    <p class="login-demo-note">🔓 Demo environment — enter any username and password to continue.</p>
+  </div>
+
+  <p class="login-footer-note">Darshan-AI · Synthetic patient data only · No real medical records</p>
+</div>
+
+<script src="/static/login.js"></script>
+</body>
+</html>

@@ -50,6 +50,14 @@ class ConversationMemory:
         """Reset the conversation."""
         self._messages = []
 
+    def truncate_to(self, length: int) -> None:
+        """
+        Drop everything after the given length — used to roll back a turn
+        that was cancelled mid-flight so its (possibly unanswered) user
+        message doesn't linger and confuse the next turn's LLM call.
+        """
+        self._messages = self._messages[:length]
+
     def __len__(self) -> int:
         return len(self._messages)
 

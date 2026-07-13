@@ -8,7 +8,7 @@ For the general agent framework (ReAct loop, tool registry, memory), see [AI_AGE
 
 ## 1. What This Architecture Is
 
-There is **one agent** (Darshan-AI) with **one brain** (Gemini). Everything it can do — math, weather, web search, remembering facts, and now hospital records — is a **tool**. The agent doesn't have separate "modes" for different domains; it just sees a list of available functions and decides which ones to call based on your question.
+There is **one agent** (Darshan-AI) with **one brain** — either Google Gemini or Groq, picked at startup via the `LLM_PROVIDER` env var (see §2b). Everything it can do — math, weather, web search, remembering facts, and now hospital records — is a **tool**. The agent doesn't have separate "modes" for different domains; it just sees a list of available functions and decides which ones to call based on your question.
 
 The hospital capability adds **three different kinds of data** to that toolset:
 
@@ -33,7 +33,9 @@ All three live in **one SQLite file**, `data/hospital.db`, with the document *te
 graph TD
     U[User — Browser or CLI] -->|question| API[FastAPI server / main.py]
     API --> AGENT[Agent.run — ReAct loop, agent/core.py]
-    AGENT <-->|native function calling| GEMINI[Gemini 2.5 Flash]
+    AGENT <-->|native function calling| LLM{LLM_PROVIDER}
+    LLM <-->|google-genai SDK| GEMINI[Gemini 2.5 Flash]
+    LLM <-->|groq SDK, OpenAI-compatible| GROQ[Groq: openai/gpt-oss-120b]
     AGENT --> REG[Tool Registry — agent/tools/registry.py]
 
     REG --> CALC[calculator]
@@ -86,9 +88,32 @@ Two consequences fall out of this for free:
 
 ---
 
+## 2b. Two LLM Providers — Gemini or Groq
+
+`agent/core.py` supports two backends behind one interface, selected once at startup by `config.LLM_PROVIDER`:
+
+| | Gemini (default) | Groq |
+|---|---|---|
+| SDK | `google-genai` | `groq` (OpenAI-compatible chat-completions + tools API) |
+| Model | `gemini-2.5-flash` | `openai/gpt-oss-120b` |
+| Tool schema format | `types.FunctionDeclaration` (`to_function_declarations()`) | `{"type": "function", "function": {...}}` (`to_openai_tools()`) |
+| Why you'd pick it | Free-tier default | Gemini's free-tier daily quota can be hit quickly during active testing; Groq's free tier is far more generous |
+
+Both paths use **real structured function calling** — tool schemas travel as API metadata, arguments arrive pre-parsed and schema-checked. Nothing about the ReAct loop, the tool registry, or the hospital data model differs between providers; only `agent/core.py`'s `_run_gemini()` vs `_run_groq()` generator (and the small schema-shape difference above) changes. `agent/tools/registry.py` builds both schema formats from the *same* `ToolDefinition` objects, so every tool — hospital or general-purpose — is automatically available to whichever provider is active.
+
+Switch providers with one line in `.env`:
+```
+LLM_PROVIDER=groq
+GROQ_API_KEY=your_key_here   # https://console.groq.com/keys (free)
+```
+
+`GROQ_MODEL` defaults to `openai/gpt-oss-120b` — chosen after live-testing several Groq-hosted models against this project's tool set: `llama-3.3-70b-versatile` and `llama-4-scout` both produced malformed or mistyped tool calls (wrong argument types, unparseable function-call syntax) on multi-step chains here (e.g. `search_patient` → `get_patient_record`); `gpt-oss-120b` chained them correctly every time. If you swap `GROQ_MODEL`, re-verify multi-step tool chaining against your own prompts before relying on it — not every function-calling-capable model handles this project's tool chains reliably.
+
+---
+
 ## 3. What Happens When You Ask a Question — Step by Step
 
-Take a concrete example: *"Summarize Sharma's medical history, including anything from scans."*
+Take a concrete example: *"Summarize Sharma's medical history, including anything from scans."* (Shown here with Gemini as the active provider — with `LLM_PROVIDER=groq` the sequence is identical, just `_run_groq()` instead of `_run_gemini()` and Groq's chat-completions endpoint instead of Gemini's `generate_content`.)
 
 ```mermaid
 sequenceDiagram
@@ -158,6 +183,16 @@ Some example questions and what they trigger:
 | "Which cardiologists are available today?" | `list_doctors(specialty="Cardiology")` | Doctor SQL |
 | "Tell me about Dr. Krishnan" | `search_doctor` **+** `get_doctor_profile` | Doctor SQL |
 | "Which patients has Dr. Chen seen recently?" | `get_doctor_profile` (the `recent_patients` join) | Doctor SQL, joined across 4 tables |
+
+### Cancelling an in-flight request
+
+The send button in the Web UI turns into a stop (■) icon while a request is running. Clicking it sends `{"action": "cancel"}` over the same WebSocket connection, which:
+
+1. Sets a `threading.Event` the agent loop (`agent/core.py`) polls between LLM round-trips and between individual tool calls — its natural checkpoints.
+2. `api/server.py`'s WebSocket handler sends the client a `"cancelled"` step immediately, rather than waiting for the agent loop to notice — since neither provider SDK is called in a way that supports aborting a request already in flight, the LLM call already in progress keeps running to completion in the background, its result just discarded.
+3. Rolls back the cancelled turn's conversation memory (the user's question, and any tool observations already recorded) so it doesn't linger as an "unanswered" turn and confuse the next message's LLM call.
+
+Cancellation is therefore **cooperative, not instant** — it takes effect at the next checkpoint (typically within a few seconds, bounded by however long the current LLM call takes), not immediately. The REST `/chat` fallback (used only if the WebSocket is down) supports client-side cancellation only — the browser stops waiting on the response, but the server has no cancellation channel over plain HTTP and keeps processing to completion.
 
 ---
 
@@ -270,6 +305,6 @@ following the `doctor_id`/`patient_id` foreign-key pattern already established.
 - **All data is synthetic** — fixed random seed, fake names/values, regenerated from scratch each time the DB is deleted.
 - **No authentication** — anyone who can reach the API can query any patient or doctor record. Real deployment needs auth + role-based access control (this was explicitly scoped out as "Phase 6" and deferred).
 - **No encryption at rest** — `hospital.db` is plain SQLite.
-- **Single shared chat agent** — the `/chat` and `/ws` conversation memory is one process-wide instance; the `/patients/{id}/summary` and `/doctors/{id}/summary` endpoints deliberately avoid this by spinning up a fresh `Agent()` per call.
+- **Single shared chat agent** — the `/chat` and `/ws` conversation memory is one process-wide instance; the `/patients/{id}/summary` and `/doctors/{id}/summary` endpoints deliberately avoid this by spinning up a fresh `Agent()` per call. Because turns on `/ws` are handled strictly one at a time, a cancelled turn's memory rollback (see §4) is safe to do by position — there's no concurrent turn that could have added anything in between.
 
 See the README's "Hospital Records — Patients & Doctors" section for the same warning in context of the rest of the project.
