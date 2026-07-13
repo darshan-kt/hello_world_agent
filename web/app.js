@@ -42,6 +42,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Load tools
   loadTools();
 
+  // Voice input
+  initVoiceInput();
+
   // Focus input
   document.getElementById('user-input').focus();
 });
@@ -221,6 +224,8 @@ function sendMessage() {
   const message = input.value.trim();
   if (!message || isThinking) return;
 
+  if (isListening) stopListening();
+
   // Add user bubble
   addUserBubble(message);
 
@@ -292,6 +297,83 @@ function sendSuggestion(el) {
   const text = el.textContent.replace(/^[^\s]+\s/, '').trim(); // remove emoji
   document.getElementById('user-input').value = text;
   sendMessage();
+}
+
+// ──────────────────────────────────────────────
+// Voice Input — Web Speech API (browser-native, no server round trip)
+// ──────────────────────────────────────────────
+let recognition = null;
+let isListening = false;
+let voiceBaseText = ''; // text already in the box when this listening session started
+
+function initVoiceInput() {
+  const micBtn = document.getElementById('mic-btn');
+  const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognitionCtor) {
+    micBtn.disabled = true;
+    micBtn.title = 'Voice input needs Chrome or Edge — not supported in this browser';
+    return;
+  }
+
+  recognition = new SpeechRecognitionCtor();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+
+  recognition.onresult = (event) => {
+    let interim = '';
+    let final = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript;
+      if (event.results[i].isFinal) final += transcript;
+      else interim += transcript;
+    }
+
+    const input = document.getElementById('user-input');
+    const sep = voiceBaseText && !voiceBaseText.endsWith(' ') ? ' ' : '';
+    input.value = (voiceBaseText + sep + final + interim).trim();
+    if (final) voiceBaseText = (voiceBaseText + sep + final).trim();
+    autoResize(input);
+  };
+
+  recognition.onerror = (event) => {
+    stopListening();
+    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+      showToast('⚠️ Microphone access denied');
+    } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
+      showToast(`⚠️ Voice input error: ${event.error}`);
+    }
+  };
+
+  // Some browsers auto-end recognition after a pause even with continuous:true.
+  // If we're still "listening" from the user's perspective, just reset state
+  // rather than leaving the mic button stuck in its active look.
+  recognition.onend = () => {
+    if (isListening) stopListening();
+  };
+}
+
+function toggleVoiceInput() {
+  if (!recognition) return;
+  isListening ? stopListening() : startListening();
+}
+
+function startListening() {
+  voiceBaseText = document.getElementById('user-input').value.trim();
+  try {
+    recognition.start();
+  } catch (e) {
+    return; // already running — ignore
+  }
+  isListening = true;
+  document.getElementById('mic-btn').classList.add('listening');
+}
+
+function stopListening() {
+  isListening = false;
+  document.getElementById('mic-btn').classList.remove('listening');
+  try { recognition.stop(); } catch (e) { /* already stopped */ }
 }
 
 function startThinking() {
@@ -577,7 +659,10 @@ function handleKeydown(e) {
 }
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeDrawer();
+  if (e.key === 'Escape') {
+    closeDrawer();
+    if (isListening) stopListening();
+  }
 });
 
 function autoResize(el) {
@@ -614,7 +699,7 @@ function markdownToHtml(text) {
   return text
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/`(.*?)`/g, '<code style="font-family:var(--font-mono);font-size:12px;background:rgba(255,255,255,0.08);padding:2px 6px;border-radius:4px">$1</code>')
+    .replace(/`(.*?)`/g, '<code style="font-family:var(--font-mono);font-size:12px;background:rgba(15,23,42,0.07);padding:2px 6px;border-radius:4px">$1</code>')
     .replace(/\n/g, '<br>');
 }
 

@@ -105,11 +105,15 @@
           onkeydown="handleKeydown(event)"
           oninput="autoResize(this)"
         ></textarea>
+        <button class="mic-btn" id="mic-btn" onclick="toggleVoiceInput()" title="Speak your question">
+          <span class="mic-icon">🎤</span>
+          <span class="mic-wave" aria-hidden="true"><span></span><span></span><span></span></span>
+        </button>
         <button class="send-btn" id="send-btn" onclick="sendMessage()">
           <span class="send-icon">➤</span>
         </button>
       </div>
-      <div class="input-hint">Press <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for new line</div>
+      <div class="input-hint">Press <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for new line · <kbd>🎤</kbd> to speak</div>
     </div>
   </section>
 

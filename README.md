@@ -42,7 +42,8 @@ This project implements the **ReAct pattern** (Reasoning + Acting), which is the
 | 🏥 **Hospital Tool (POC)** | SQLite-backed patient records — synthetic data only, see note below |
 | 🔧 **Tool System** | Add any function as a tool with the `@tool()` decorator |
 | 💾 **Memory** | Short-term (conversation) + long-term (JSON, survives restarts) |
-| 🌐 **Web UI** | Dark chat interface — spinner while thinking, clean final answers |
+| 🌐 **Web UI** | Light clinical chat interface — spinner while thinking, clean final answers |
+| 🎤 **Voice Input** | Speak instead of typing — browser-native speech-to-text, no server round trip |
 | 🖥️ **CLI** | Rich terminal interface for testing |
 | ⚡ **WebSocket** | Real-time streaming from agent to browser |
 | 🐳 **Docker Compose** | Entire stack with one command: `docker compose up -d` |
