@@ -13,6 +13,11 @@
 
 New to AI agents? Read **[AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)** first — a plain-language walkthrough of the concepts.
 
+<p align="center">
+  <img src="docs/demo.gif" alt="Darshan-AI demo — signing in, asking a hospital question and getting a tool-backed answer, then browsing the Patients and Doctors directories" width="760" />
+</p>
+<p align="center"><sub>Sign in → ask a hospital question (real tool calls, real answer) → browse Patients &amp; Doctors directly.</sub></p>
+
 ---
 
 ## 🧠 What Is an AI Agent?
@@ -190,7 +195,8 @@ hello_agent/
 │   └── hospital.db           ← Synthetic patient records (auto-seeded, gitignored)
 │
 ├── docs/
-│   └── web-ui.png            ← Screenshot of the web interface
+│   ├── demo.gif               ← Animated walkthrough (sign-in → chat → Patients/Doctors)
+│   └── screenshot-*.png       ← Individual screenshots of each screen
 │
 ├── docker-compose.yml        ← One-command full stack
 ├── Makefile                  ← make up / down / dev / clean ...
@@ -372,15 +378,56 @@ curl http://localhost:8000/health
 
 ## 📸 Web Interface
 
-This is what you get at `http://localhost:8000` — a light clinical chat UI, with **Patients** and **Doctors**
-directories one click away in the sidebar. While the agent works, a vitals-style pulse shows its progress
-("Thinking… → Using search_doctor…"), and only the clean final answer lands in the chat. Voice input
-(🎤) is built into the input bar, and the send button doubles as a stop (■) button — click it any time
-to cancel a request that's still running:
+This is what you get at `http://localhost:8000` — a light clinical chat UI, gated by a staff sign-in
+screen, with **Patients** and **Doctors** directories one click away in the sidebar. While the agent
+works, a vitals-style pulse shows its progress ("Thinking… → Using search_doctor…"), and only the clean
+final answer lands in the chat. Voice input (🎤) is built into the input bar, and the send button doubles
+as a stop (■) button — click it any time to cancel a request that's still running.
 
-<p align="center">
-  <img src="docs/web-ui.png" alt="Darshan-AI hospital assistant web interface — chat panel with hospital-focused suggestion chips, Patients and Doctors tabs in the sidebar, and the Gemini model badge" width="720" />
-</p>
+<table>
+<tr>
+<td width="50%">
+
+**Sign-in**
+<img src="docs/screenshot-login.png" alt="Darshan-AI sign-in screen — demo staff portal with username and password fields" width="100%" />
+
+</td>
+<td width="50%">
+
+**Chat — hospital-focused suggestions**
+<img src="docs/screenshot-chat-welcome.png" alt="Darshan-AI chat welcome screen with hospital-focused suggestion chips" width="100%" />
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**Chat — a real tool-backed answer**
+<img src="docs/screenshot-chat-answer.png" alt="Darshan-AI answering a question about a doctor's qualifications, formatted with headings and bullet points" width="100%" />
+
+</td>
+<td width="50%">
+
+**Patients directory**
+<img src="docs/screenshot-patients.png" alt="Darshan-AI Patients directory — searchable grid of synthetic patient records" width="100%" />
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**Patient record + AI summary**
+<img src="docs/screenshot-patient-drawer.png" alt="Darshan-AI patient detail drawer — admissions, prescriptions, lab reports, surgeries, and an AI summary button" width="100%" />
+
+</td>
+<td width="50%">
+
+**Doctor profile + weekly availability**
+<img src="docs/screenshot-doctor-drawer.png" alt="Darshan-AI doctor detail drawer — qualifications, weekly availability schedule, and AI bio button" width="100%" />
+
+</td>
+</tr>
+</table>
 
 ---
 
