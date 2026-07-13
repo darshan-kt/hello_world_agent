@@ -7,6 +7,7 @@ from agent.tools import (
     weather,
     memory_tool,
     web_search,
+    hospital,
 )
 
-__all__ = ["calculator", "weather", "memory_tool", "web_search"]
+__all__ = ["calculator", "weather", "memory_tool", "web_search", "hospital"]

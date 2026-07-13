@@ -46,19 +46,6 @@ class ConversationMemory:
         """Return all messages in order."""
         return list(self._messages)
 
-    def to_gemini_format(self) -> list:
-        """
-        Convert to Gemini API format.
-        Gemini uses 'user' and 'model' roles (not 'assistant').
-        """
-        formatted = []
-        for msg in self._messages:
-            if msg.role == "system":
-                continue  # System prompt is passed separately
-            role = "model" if msg.role in ("assistant", "tool") else "user"
-            formatted.append({"role": role, "parts": [{"text": msg.content}]})
-        return formatted
-
     def clear(self) -> None:
         """Reset the conversation."""
         self._messages = []

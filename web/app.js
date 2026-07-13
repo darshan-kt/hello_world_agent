@@ -19,6 +19,11 @@ const TOOL_ICONS = {
   remember:      { icon: '🧠', cls: 'memory' },
   recall:        { icon: '🧠', cls: 'memory' },
   list_memories: { icon: '📋', cls: 'memory' },
+  list_patients:          { icon: '🏥', cls: 'hospital' },
+  search_patient:         { icon: '🏥', cls: 'hospital' },
+  get_patient_record:     { icon: '🏥', cls: 'hospital' },
+  list_patient_documents: { icon: '📄', cls: 'hospital' },
+  search_patient_documents:{ icon: '📄', cls: 'hospital' },
 };
 
 // ──────────────────────────────────────────────

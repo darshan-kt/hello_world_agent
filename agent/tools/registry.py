@@ -12,7 +12,7 @@ Usage:
         return str(eval(expression))
 """
 
-import json
+import inspect
 import traceback
 from typing import Callable, Dict, Any, Optional
 from dataclasses import dataclass, field
@@ -96,21 +96,41 @@ def run_tool(name: str, input_data: Dict[str, Any]) -> str:
         return f"ERROR running tool '{name}': {e}\n{traceback.format_exc()}"
 
 
-def tools_prompt() -> str:
+def to_function_declarations() -> list:
     """
-    Generate the tool list string injected into the system prompt.
-    The LLM reads this to know what tools exist and how to call them.
-    """
-    if not _REGISTRY:
-        return "No tools available."
+    Convert all registered tools into Gemini native function-calling
+    declarations, so the model receives tool schemas as structured API
+    metadata instead of text dumped into the prompt on every turn.
 
-    lines = ["## Available Tools\n"]
+    A parameter is marked "required" in the JSON schema unless the
+    underlying Python function gives it a default value — this lets
+    tools like `list_patients(limit: int = 20)` stay optional without
+    the @tool() call site having to repeat that information.
+    """
+    from google.genai import types
+
+    declarations = []
     for name, t in _REGISTRY.items():
-        lines.append(f"### {name}")
-        lines.append(f"Description: {t.description}")
-        if t.parameters:
-            lines.append(f"Parameters: {json.dumps(t.parameters, indent=2)}")
-        if t.examples:
-            lines.append(f"Examples: {json.dumps(t.examples, indent=2)}")
-        lines.append("")
-    return "\n".join(lines)
+        sig = inspect.signature(t.func)
+        properties: Dict[str, Any] = {}
+        required = []
+        for pname, pschema in t.parameters.items():
+            properties[pname] = {
+                k: v for k, v in pschema.items() if k in ("type", "description", "enum")
+            }
+            param = sig.parameters.get(pname)
+            if param is None or param.default is inspect.Parameter.empty:
+                required.append(pname)
+
+        json_schema: Dict[str, Any] = {"type": "object", "properties": properties}
+        if required:
+            json_schema["required"] = required
+
+        declarations.append(
+            types.FunctionDeclaration(
+                name=name,
+                description=t.description,
+                parameters_json_schema=json_schema,
+            )
+        )
+    return declarations

@@ -33,6 +33,11 @@ MEMORY_WINDOW   = int(os.getenv("MEMORY_WINDOW", "20"))   # keep last N messages
 MEMORY_FILE     = Path(__file__).parent / "data" / "memory.json"
 
 # ──────────────────────────────────────────────
+# Hospital Tool Settings (POC — synthetic data only)
+# ──────────────────────────────────────────────
+HOSPITAL_DB_FILE = Path(__file__).parent / "data" / "hospital.db"
+
+# ──────────────────────────────────────────────
 # API Server Settings
 # ──────────────────────────────────────────────
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
@@ -45,23 +50,16 @@ SYSTEM_PROMPT = f"""
 You are {AGENT_NAME}, a helpful and intelligent AI assistant.
 
 ## Your Capabilities
-You have access to a set of tools. Use them when needed to give accurate answers.
-Always prefer using a tool over guessing.
-
-## How You Think (ReAct Pattern)
-For each user message, you MUST follow this format when using a tool:
-
-Thought: [Reason about what the user needs and which tool to use]
-Action: [tool_name]
-Action Input: {{"key": "value"}}
-
-When you have a final answer:
-Thought: [I now have everything I need]
-Final Answer: [Your response to the user]
+You have access to a set of tools (provided separately via function calling).
+Call a tool only when it would meaningfully improve accuracy — arithmetic, current
+weather, current events, or facts stored about this specific user. For stable,
+well-known facts you're already confident about (e.g. "capital of France"), answer
+directly without a tool call. You may call multiple tools, one after another,
+before giving your final answer.
 
 ## Rules
 1. Always be honest — if you don't know, say so.
-2. Use tools when accuracy matters (math, weather, facts).
+2. Use tools when accuracy matters (math, weather, facts, current events).
 3. Be concise but complete.
 4. If a tool fails, explain what happened and try an alternative.
 """.strip()

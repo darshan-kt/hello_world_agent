@@ -4,12 +4,15 @@ api/server.py — FastAPI Web Server
 Provides REST + WebSocket endpoints for the web UI.
 
 Endpoints:
-  GET  /              → Serve web UI
-  POST /chat          → Send a message, get full response
-  WS   /ws            → WebSocket for real-time step streaming
-  GET  /tools         → List available tools
-  POST /reset         → Clear conversation memory
-  GET  /health        → Health check
+  GET  /                          → Serve web UI
+  POST /chat                      → Send a message, get full response
+  WS   /ws                        → WebSocket for real-time step streaming
+  GET  /tools                     → List available tools
+  POST /reset                     → Clear conversation memory
+  GET  /health                    → Health check
+  GET  /patients                  → List/search patients (instant, no LLM call)
+  GET  /patients/{id}             → Full structured record (instant, no LLM call)
+  GET  /patients/{id}/summary     → AI-generated clinical summary (structured + document data)
 """
 
 import asyncio
@@ -17,13 +20,14 @@ import json
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 # Import agent (tool registration happens here)
 from agent import Agent
+from agent.tools.hospital import get_patient_full_json, list_patients_json, patient_exists
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -42,6 +46,17 @@ app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")
 _agent = Agent()
 
 
+def _run_agent(agent: Agent, message: str) -> tuple:
+    """Drain the ReAct loop for one message, returning (final_answer, steps)."""
+    steps = []
+    answer = ""
+    for step in agent.run(message):
+        steps.append(step.to_dict())
+        if step.type == "answer":
+            answer = step.content
+    return answer, steps
+
+
 # ──────────────────────────────────────────────
 # Request/Response Models
 # ──────────────────────────────────────────────
@@ -52,6 +67,10 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
     steps: list
+
+class PatientSummaryResponse(BaseModel):
+    patient_id: int
+    summary: str
 
 
 # ──────────────────────────────────────────────
@@ -92,18 +111,57 @@ async def chat(request: ChatRequest):
     Send a message and get the full response with all intermediate steps.
     Use /ws for real-time streaming.
     """
-    def run_agent() -> tuple:
-        steps = []
-        answer = ""
-        for step in _agent.run(request.message):
-            steps.append(step.to_dict())
-            if step.type == "answer":
-                answer = step.content
-        return answer, steps
-
     # The agent makes blocking LLM calls — run it off the event loop
-    answer, steps = await asyncio.to_thread(run_agent)
+    answer, steps = await asyncio.to_thread(_run_agent, _agent, request.message)
     return ChatResponse(answer=answer, steps=steps)
+
+
+@app.get("/patients")
+async def patients_list(query: str = "", limit: int = 50):
+    """List/search patients — direct DB read, no LLM call, instant for UI browsing."""
+    return {"patients": list_patients_json(query=query, limit=limit)}
+
+
+@app.get("/patients/{patient_id}")
+async def patient_detail(patient_id: int):
+    """Full structured record for one patient — direct DB read, no LLM call."""
+    record = get_patient_full_json(patient_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"No patient found with ID {patient_id}")
+    return record
+
+
+@app.get("/patients/{patient_id}/summary", response_model=PatientSummaryResponse)
+async def patient_summary(patient_id: int):
+    """
+    Generate an AI clinical summary for one patient, combining structured
+    records (admissions, prescriptions, labs, surgeries) with unstructured
+    documents (discharge summaries, scan reports, doctor's notes via RAG).
+
+    Uses a fresh, stateless Agent per call — independent of the shared
+    chat agent's conversation memory, since this is a one-shot report,
+    not a turn in an ongoing conversation.
+    """
+    if not patient_exists(patient_id):
+        raise HTTPException(status_code=404, detail=f"No patient found with ID {patient_id}")
+
+    prompt = (
+        f"Generate a clinical summary for patient ID {patient_id}. Include demographics, "
+        f"admission history, prescriptions, lab reports, and surgeries from their record. "
+        f"Also check their documents for relevant discharge summaries, scan/radiology "
+        f"reports, or doctor's notes, and incorporate key findings. Structure the summary "
+        f"with clear sections."
+    )
+
+    def run() -> tuple:
+        return _run_agent(Agent(), prompt)
+
+    answer, steps = await asyncio.to_thread(run)
+    if not answer:
+        error_step = next((s for s in steps if s["type"] == "error"), None)
+        detail = error_step["content"] if error_step else "Agent failed to produce a summary."
+        raise HTTPException(status_code=502, detail=detail)
+    return PatientSummaryResponse(patient_id=patient_id, summary=answer)
 
 
 @app.post("/reset")
