@@ -99,6 +99,20 @@ async def serve_ui():
     return HTMLResponse(content=html_path.read_text())
 
 
+@app.get("/login", response_class=HTMLResponse)
+async def serve_login():
+    """
+    Serve the sign-in page. This is a demo-only gate — any non-empty
+    username/password is accepted client-side (web/login.js); there's no
+    server-side session, user table, or credential check. It exists for the
+    professional-hospital-software look and flow, not for real access
+    control (this project has no auth backend by design — see
+    HOSPITAL_RAG_ARCHITECTURE.md's "Current Limitations" section).
+    """
+    html_path = WEB_DIR / "login.html"
+    return HTMLResponse(content=html_path.read_text())
+
+
 @app.get("/health")
 async def health():
     """Health check endpoint."""

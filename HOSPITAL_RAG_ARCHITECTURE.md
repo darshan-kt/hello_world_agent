@@ -303,7 +303,7 @@ following the `doctor_id`/`patient_id` foreign-key pattern already established.
 ## 7. Current Limitations (by design, for a POC)
 
 - **All data is synthetic** — fixed random seed, fake names/values, regenerated from scratch each time the DB is deleted.
-- **No authentication** — anyone who can reach the API can query any patient or doctor record. Real deployment needs auth + role-based access control (this was explicitly scoped out as "Phase 6" and deferred).
+- **No real authentication** — `web/login.html` is a cosmetic sign-in screen for the professional-software look and flow: it accepts any non-empty username/password, stores the name in `localStorage`, and gates client-side navigation to `index.html`. There is no server-side session, no user table, and no credential check — every REST/WebSocket endpoint in `api/server.py` is still fully open to anyone who can reach it directly (`curl`, a different browser tab with `localStorage` cleared manually, etc.), login screen or not. Real deployment needs actual auth (server-side sessions or tokens) + role-based access control (this was explicitly scoped out as "Phase 6" and deferred).
 - **No encryption at rest** — `hospital.db` is plain SQLite.
 - **Single shared chat agent** — the `/chat` and `/ws` conversation memory is one process-wide instance; the `/patients/{id}/summary` and `/doctors/{id}/summary` endpoints deliberately avoid this by spinning up a fresh `Agent()` per call. Because turns on `/ws` are handled strictly one at a time, a cancelled turn's memory rollback (see §4) is safe to do by position — there's no concurrent turn that could have added anything in between.
 
